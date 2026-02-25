@@ -13,31 +13,36 @@ const PORT = 3000;
 app.use(express.json({ limit: '10mb' }));
 
 async function startServer() {
-  await initDb();
+  try {
+    await initDb();
+    console.log("Banco de dados inicializado com sucesso.");
+  } catch (error) {
+    console.error("Erro fatal ao inicializar banco de dados:", error);
+  }
   
   // Simplified Routes (No Login)
-  app.get("/api/users", (req, res) => {
-    const users = db.prepare("SELECT * FROM usuarios").all();
+  app.get("/api/users", async (req, res) => {
+    const users = await db.prepare("SELECT * FROM usuarios").all();
     res.json(users);
   });
 
-  app.get("/api/user/:id", (req, res) => {
-    const user = db.prepare("SELECT * FROM usuarios WHERE id = ?").get(req.params.id);
+  app.get("/api/user/:id", async (req, res) => {
+    const user = await db.prepare("SELECT * FROM usuarios WHERE id = ?").get(req.params.id);
     res.json(user);
   });
 
-  app.get("/api/user/:id/family", (req, res) => {
-    const family = db.prepare("SELECT * FROM participantes WHERE usuario_id = ?").all(req.params.id);
+  app.get("/api/user/:id/family", async (req, res) => {
+    const family = await db.prepare("SELECT * FROM participantes WHERE usuario_id = ?").all(req.params.id);
     res.json(family);
   });
 
-  app.get("/api/user/:id/finance", (req, res) => {
-    const finance = db.prepare("SELECT * FROM financeiro WHERE usuario_id = ?").get(req.params.id);
+  app.get("/api/user/:id/finance", async (req, res) => {
+    const finance = await db.prepare("SELECT * FROM financeiro WHERE usuario_id = ?").get(req.params.id);
     res.json(finance);
   });
 
-  app.get("/api/user/:id/payments", (req, res) => {
-    const payments = db.prepare("SELECT * FROM pagamentos WHERE usuario_id = ? ORDER BY data_pagamento DESC").all(req.params.id);
+  app.get("/api/user/:id/payments", async (req, res) => {
+    const payments = await db.prepare("SELECT * FROM pagamentos WHERE usuario_id = ? ORDER BY data_pagamento DESC").all(req.params.id);
     res.json(payments);
   });
 
@@ -54,19 +59,19 @@ async function startServer() {
     return 0;
   };
 
-  app.post("/api/user/:id/add-member", (req, res) => {
+  app.post("/api/user/:id/add-member", async (req, res) => {
     const { nome, idade, dias, tipo } = req.body;
     const usuarioId = req.params.id;
     try {
-      const user = db.prepare("SELECT nome FROM usuarios WHERE id = ?").get(usuarioId) as any;
+      const user = await db.prepare("SELECT nome FROM usuarios WHERE id = ?").get(usuarioId) as any;
       if (!user) return res.status(404).json({ error: "Usuário não encontrado" });
 
       const valorTotal = calculatePrice(tipo, dias);
-      db.prepare("INSERT INTO participantes (lider, nome, tipo, idade, dias, valor_total, usuario_id) VALUES (?, ?, ?, ?, ?, ?, ?)")
+      await db.prepare("INSERT INTO participantes (lider, nome, tipo, idade, dias, valor_total, usuario_id) VALUES (?, ?, ?, ?, ?, ?, ?)")
         .run(user.nome, nome, tipo, idade, dias, valorTotal, usuarioId);
 
       // Update financeiro
-      db.prepare("UPDATE financeiro SET valor_total = valor_total + ?, saldo = saldo + ? WHERE usuario_id = ?")
+      await db.prepare("UPDATE financeiro SET valor_total = valor_total + ?, saldo = saldo + ? WHERE usuario_id = ?")
         .run(valorTotal, valorTotal, usuarioId);
 
       res.json({ success: true });
@@ -76,15 +81,15 @@ async function startServer() {
     }
   });
 
-  app.delete("/api/participant/:id", (req, res) => {
+  app.delete("/api/participant/:id", async (req, res) => {
     try {
-      const part = db.prepare("SELECT * FROM participantes WHERE id = ?").get(req.params.id) as any;
+      const part = await db.prepare("SELECT * FROM participantes WHERE id = ?").get(req.params.id) as any;
       if (!part) return res.status(404).json({ error: "Participante não encontrado" });
 
-      db.prepare("DELETE FROM participantes WHERE id = ?").run(req.params.id);
+      await db.prepare("DELETE FROM participantes WHERE id = ?").run(req.params.id);
 
       // Update financeiro
-      db.prepare("UPDATE financeiro SET valor_total = valor_total - ?, saldo = saldo - ? WHERE usuario_id = ?")
+      await db.prepare("UPDATE financeiro SET valor_total = valor_total - ?, saldo = saldo - ? WHERE usuario_id = ?")
         .run(part.valor_total, part.valor_total, part.usuario_id);
 
       res.json({ success: true });
@@ -94,10 +99,10 @@ async function startServer() {
     }
   });
 
-  app.patch("/api/participant/:id", (req, res) => {
+  app.patch("/api/participant/:id", async (req, res) => {
     const { idade } = req.body;
     try {
-      const part = db.prepare("SELECT * FROM participantes WHERE id = ?").get(req.params.id) as any;
+      const part = await db.prepare("SELECT * FROM participantes WHERE id = ?").get(req.params.id) as any;
       if (!part) return res.status(404).json({ error: "Participante não encontrado" });
 
       // Determine new type based on age
@@ -108,11 +113,11 @@ async function startServer() {
       const newValorTotal = calculatePrice(newTipo, part.dias);
       const diff = newValorTotal - part.valor_total;
 
-      db.prepare("UPDATE participantes SET idade = ?, tipo = ?, valor_total = ? WHERE id = ?")
+      await db.prepare("UPDATE participantes SET idade = ?, tipo = ?, valor_total = ? WHERE id = ?")
         .run(idade, newTipo, newValorTotal, req.params.id);
 
       // Update financeiro
-      db.prepare("UPDATE financeiro SET valor_total = valor_total + ?, saldo = saldo + ? WHERE usuario_id = ?")
+      await db.prepare("UPDATE financeiro SET valor_total = valor_total + ?, saldo = saldo + ? WHERE usuario_id = ?")
         .run(diff, diff, part.usuario_id);
 
       res.json({ success: true });
@@ -122,30 +127,30 @@ async function startServer() {
     }
   });
 
-  app.get("/api/admin/families", (req, res) => {
-    const families = db.prepare(`
+  app.get("/api/admin/families", async (req, res) => {
+    const families = await db.prepare(`
       SELECT u.id, u.nome as lider, f.valor_total, f.valor_pago, f.saldo, f.status
       FROM usuarios u
       JOIN financeiro f ON u.id = f.usuario_id
       WHERE u.tipo_usuario = 'participante'
     `).all();
 
-    const result = families.map((f: any) => {
-      const members = db.prepare("SELECT * FROM participantes WHERE usuario_id = ?").all(f.id);
-      const payments = db.prepare("SELECT * FROM pagamentos WHERE usuario_id = ? ORDER BY data_pagamento DESC").all(f.id);
+    const result = await Promise.all(families.map(async (f: any) => {
+      const members = await db.prepare("SELECT * FROM participantes WHERE usuario_id = ?").all(f.id);
+      const payments = await db.prepare("SELECT * FROM pagamentos WHERE usuario_id = ? ORDER BY data_pagamento DESC").all(f.id);
       return { ...f, members, payments };
-    });
+    }));
 
     res.json(result);
   });
 
-  app.post("/api/payments/save", (req, res) => {
+  app.post("/api/payments/save", async (req, res) => {
     const { userId, amount, date } = req.body;
     try {
-      db.prepare("INSERT INTO pagamentos (usuario_id, valor, data_pagamento) VALUES (?, ?, ?)")
+      await db.prepare("INSERT INTO pagamentos (usuario_id, valor, data_pagamento) VALUES (?, ?, ?)")
         .run(userId, amount, date);
       
-      db.prepare(`
+      await db.prepare(`
         UPDATE financeiro 
         SET valor_pago = valor_pago + ?, 
             saldo = saldo - ?,
@@ -164,15 +169,20 @@ async function startServer() {
     }
   });
 
-  app.get("/api/admin/stats", (req, res) => {
-    const totalCollected = db.prepare("SELECT SUM(valor_pago) as sum FROM financeiro").get().sum || 0;
-    const totalPending = db.prepare("SELECT SUM(saldo) as sum FROM financeiro").get().sum || 0;
-    const totalParticipants = db.prepare("SELECT COUNT(*) as count FROM participantes WHERE tipo != 'Isento'").get().count;
+  app.get("/api/admin/stats", async (req, res) => {
+    const statsRes = await db.prepare("SELECT SUM(valor_pago) as sum FROM financeiro").get();
+    const pendingRes = await db.prepare("SELECT SUM(saldo) as sum FROM financeiro").get();
+    const participantsRes = await db.prepare("SELECT COUNT(*) as count FROM participantes WHERE tipo != 'Isento'").get();
+    
+    const totalCollected = statsRes.sum || 0;
+    const totalPending = pendingRes.sum || 0;
+    const totalParticipants = participantsRes.count;
+    
     res.json({ totalCollected, totalPending, vagasOcupadas: totalParticipants, vagasTotais: 55 });
   });
 
-  app.get("/api/admin/participants", (req, res) => {
-    const participants = db.prepare(`
+  app.get("/api/admin/participants", async (req, res) => {
+    const participants = await db.prepare(`
       SELECT p.*, f.valor_pago, f.saldo, f.status as finance_status
       FROM participantes p
       JOIN financeiro f ON p.usuario_id = f.usuario_id

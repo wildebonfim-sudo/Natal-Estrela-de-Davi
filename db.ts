@@ -1,5 +1,4 @@
 import { createClient } from "@libsql/client";
-import Database from "better-sqlite3";
 import path from "path";
 import fs from "fs";
 import dotenv from "dotenv";
@@ -14,7 +13,7 @@ const tursoToken = process.env.TURSO_AUTH_TOKEN;
 // Interface to unify better-sqlite3 and libsql
 interface DbClient {
   prepare: (sql: string) => any;
-  exec: (sql: string) => void;
+  exec: (sql: string) => Promise<any>;
 }
 
 let db: DbClient;
@@ -58,7 +57,7 @@ if (tursoUrl && tursoToken) {
     exec: (sql: string) => client.execute(sql),
   } as any;
 } else {
-  // Use Local SQLite
+  // Use Local LibSQL (compatible with Turso client)
   let dbPath = "database.db";
   if (isVercel) {
     dbPath = path.join("/tmp", "database.db");
@@ -66,8 +65,24 @@ if (tursoUrl && tursoToken) {
     dbPath = path.join("/data", "database.db");
   }
   
-  const localDb = new Database(dbPath);
-  db = localDb as any;
+  const client = createClient({
+    url: `file:${dbPath}`,
+  });
+
+  db = {
+    prepare: (sql: string) => ({
+      run: async (...args: any[]) => client.execute({ sql, args }),
+      get: async (...args: any[]) => {
+        const res = await client.execute({ sql, args });
+        return res.rows[0];
+      },
+      all: async (...args: any[]) => {
+        const res = await client.execute({ sql, args });
+        return res.rows;
+      }
+    }),
+    exec: (sql: string) => client.execute(sql),
+  } as any;
 }
 
 export const initDb = async () => {
