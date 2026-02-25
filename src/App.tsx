@@ -556,7 +556,9 @@ function ParticipantDashboard({ user }: { user: User }) {
                 <div key={pay.id} className="p-4 flex justify-between items-center">
                   <div>
                     <p className="font-bold text-stone-800 text-sm">R$ {pay.valor.toLocaleString('pt-BR')}</p>
-                    <p className="text-[10px] text-stone-400 font-medium uppercase tracking-wider mt-0.5">{new Date(pay.data_pagamento).toLocaleDateString('pt-BR')}</p>
+                    <p className="text-[10px] text-stone-400 font-medium uppercase tracking-wider mt-0.5">
+                      {pay.data_pagamento.split('-').reverse().join('/')}
+                    </p>
                   </div>
                   <div className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full uppercase tracking-wider">
                     <CheckCircle size={10} /> Validado

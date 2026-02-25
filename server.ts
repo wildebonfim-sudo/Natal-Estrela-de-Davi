@@ -150,17 +150,18 @@ async function startServer() {
       await db.prepare("INSERT INTO pagamentos (usuario_id, valor, data_pagamento) VALUES (?, ?, ?)")
         .run(userId, amount, date);
       
-      await db.prepare(`
-        UPDATE financeiro 
-        SET valor_pago = valor_pago + ?, 
-            saldo = saldo - ?,
-            status = CASE 
-              WHEN (saldo - ?) <= 0 THEN 'Quitado'
-              WHEN (valor_pago + ?) > 0 THEN 'Parcial'
-              ELSE 'Pendente'
-            END
-        WHERE usuario_id = ?
-      `).run(amount, amount, amount, amount, userId);
+      // Get current finance to calculate new values accurately
+      const fin = await db.prepare("SELECT * FROM financeiro WHERE usuario_id = ?").get(userId);
+      if (fin) {
+        const novoPago = (fin.valor_pago || 0) + amount;
+        const novoSaldo = (fin.valor_total || 0) - novoPago;
+        let novoStatus = 'Pendente';
+        if (novoSaldo <= 0) novoStatus = 'Quitado';
+        else if (novoPago > 0) novoStatus = 'Parcial';
+
+        await db.prepare("UPDATE financeiro SET valor_pago = ?, saldo = ?, status = ? WHERE usuario_id = ?")
+          .run(novoPago, novoSaldo, novoStatus, userId);
+      }
 
       res.json({ success: true });
     } catch (e) {
