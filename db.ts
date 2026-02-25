@@ -279,31 +279,39 @@ export const initDb = async () => {
     { lider: "Daiana", valor: 200, data: "2026-02-11" },
   ];
 
-  // Only seed payments if none exist to avoid duplicates on cloud
   const payCountRes = await db.prepare("SELECT COUNT(*) as count FROM pagamentos").get();
-  const payCount = payCountRes.count || payCountRes['COUNT(*)'];
+  const payCount = payCountRes ? (payCountRes.count ?? payCountRes['COUNT(*)'] ?? 0) : 0;
   
-  if (payCount === 0) {
+  console.log(`Pagamentos encontrados no banco: ${payCount}`);
+
+  if (Number(payCount) === 0) {
+    console.log("Iniciando seeding de pagamentos oficiais...");
     for (const pay of officialPayments) {
       const user = await db.prepare("SELECT id FROM usuarios WHERE nome = ?").get(pay.lider);
       if (user) {
         const userId = user.id;
-        await db.prepare("INSERT OR IGNORE INTO pagamentos (usuario_id, valor, data_pagamento) VALUES (?, ?, ?)")
+        console.log(`Inserindo pagamento para ${pay.lider} (ID: ${userId}): R$ ${pay.valor}`);
+        
+        await db.prepare("INSERT INTO pagamentos (usuario_id, valor, data_pagamento) VALUES (?, ?, ?)")
           .run(userId, pay.valor, pay.data);
         
-        await db.prepare(`
-          UPDATE financeiro 
-          SET valor_pago = valor_pago + ?, 
-              saldo = valor_total - (valor_pago + ?),
-              status = CASE 
-                WHEN (valor_total - (valor_pago + ?)) <= 0 THEN 'Quitado'
-                WHEN (valor_pago + ?) > 0 THEN 'Parcial'
-                ELSE 'Pendente'
-              END
-          WHERE usuario_id = ?
-        `).run(pay.valor, pay.valor, pay.valor, pay.valor, userId);
+        // Update financeiro with absolute calculation to be safe
+        const fin = await db.prepare("SELECT * FROM financeiro WHERE usuario_id = ?").get(userId);
+        if (fin) {
+          const novoPago = (fin.valor_pago || 0) + pay.valor;
+          const novoSaldo = (fin.valor_total || 0) - novoPago;
+          let novoStatus = 'Pendente';
+          if (novoSaldo <= 0) novoStatus = 'Quitado';
+          else if (novoPago > 0) novoStatus = 'Parcial';
+
+          await db.prepare("UPDATE financeiro SET valor_pago = ?, saldo = ?, status = ? WHERE usuario_id = ?")
+            .run(novoPago, novoSaldo, novoStatus, userId);
+        }
+      } else {
+        console.warn(`Usuário não encontrado para pagamento: ${pay.lider}`);
       }
     }
+    console.log("Seeding de pagamentos concluído.");
   }
 };
 
