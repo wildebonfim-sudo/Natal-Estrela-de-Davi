@@ -54,7 +54,12 @@ if (tursoUrl && tursoToken) {
         }
       }
     }),
-    exec: (sql: string) => client.execute(sql),
+    exec: async (sql: string) => {
+      const statements = sql.split(';').map(s => s.trim()).filter(s => s.length > 0);
+      for (const s of statements) {
+        await client.execute(s);
+      }
+    },
   } as any;
 } else {
   // Use Local LibSQL (compatible with Turso client)
@@ -81,7 +86,12 @@ if (tursoUrl && tursoToken) {
         return res.rows;
       }
     }),
-    exec: (sql: string) => client.execute(sql),
+    exec: async (sql: string) => {
+      const statements = sql.split(';').map(s => s.trim()).filter(s => s.length > 0);
+      for (const s of statements) {
+        await client.execute(s);
+      }
+    },
   } as any;
 }
 
@@ -185,38 +195,54 @@ export const initDb = async () => {
     console.log("Tabelas verificadas/criadas.");
 
     const checkRes = await db.prepare("SELECT COUNT(*) as count FROM usuarios").get();
+    const checkPartRes = await db.prepare("SELECT COUNT(*) as count FROM participantes").get();
+    
     const checkSeeded = checkRes ? (checkRes.count ?? checkRes['COUNT(*)'] ?? 0) : 0;
+    const checkPartSeeded = checkPartRes ? (checkPartRes.count ?? checkPartRes['COUNT(*)'] ?? 0) : 0;
 
-    console.log(`Usuários encontrados no banco: ${checkSeeded}`);
+    console.log(`Usuários: ${checkSeeded}, Participantes: ${checkPartSeeded}`);
 
-    if (Number(checkSeeded) === 0) {
-      console.log("Banco vazio. Iniciando seeding de dados oficiais...");
-      const insertUser = db.prepare("INSERT INTO usuarios (nome, tipo_usuario, lider_familia) VALUES (?, ?, ?)");
-      const insertPart = db.prepare("INSERT INTO participantes (lider, nome, tipo, idade, dias, valor_total, usuario_id) VALUES (?, ?, ?, ?, ?, ?, ?)");
-      const insertFin = db.prepare("INSERT INTO financeiro (usuario_id, valor_total, valor_pago, saldo, status) VALUES (?, ?, ?, ?, ?)");
+    if (Number(checkSeeded) === 0 || Number(checkPartSeeded) === 0) {
+      console.log("Iniciando seeding de dados oficiais...");
+      const insertUser = db.prepare("INSERT OR IGNORE INTO usuarios (nome, tipo_usuario, lider_familia) VALUES (?, ?, ?)");
+      const insertPart = db.prepare("INSERT OR IGNORE INTO participantes (lider, nome, tipo, idade, dias, valor_total, usuario_id) VALUES (?, ?, ?, ?, ?, ?, ?)");
+      const insertFin = db.prepare("INSERT OR IGNORE INTO financeiro (usuario_id, valor_total, valor_pago, saldo, status) VALUES (?, ?, ?, ?, ?)");
 
       await insertUser.run("Administrador", "admin", "nao");
 
       const leaders = new Map();
       for (const p of seedParticipants) {
-        if (!leaders.has(p.lider)) {
-          const res = await insertUser.run(p.lider, "participante", "sim");
-          const lastId = res.lastInsertRowid || res.lastInsertId || (res.rowsAffected > 0 ? leaders.size + 2 : null); 
-          
-          let actualId = lastId;
-          if (!actualId) {
-            const newUser = await db.prepare("SELECT id FROM usuarios WHERE nome = ?").get(p.lider);
-            actualId = newUser?.id;
-          }
+        try {
+          if (!leaders.has(p.lider)) {
+            console.log(`Criando líder: ${p.lider}`);
+            const res = await insertUser.run(p.lider, "participante", "sim");
+            
+            // LibSQL lastInsertRowid is BigInt, convert to Number
+            let lastId = res.lastInsertRowid !== undefined ? Number(res.lastInsertRowid) : null;
+            
+            if (!lastId) {
+              const newUser = await db.prepare("SELECT id FROM usuarios WHERE nome = ?").get(p.lider);
+              lastId = newUser ? newUser.id : null;
+            }
 
-          leaders.set(p.lider, actualId);
-          await insertFin.run(actualId, 0, 0, 0, "Pendente");
+            if (lastId) {
+              leaders.set(p.lider, lastId);
+              await insertFin.run(lastId, 0, 0, 0, "Pendente");
+              console.log(`Líder ${p.lider} criado com ID ${lastId}`);
+            } else {
+              console.error(`Falha ao obter ID para o líder ${p.lider}`);
+              continue;
+            }
+          }
+          
+          const userId = leaders.get(p.lider);
+          const valorTotal = calculatePrice(p.tipo, p.dias);
+          await insertPart.run(p.lider, p.nome, p.tipo, p.idade, p.dias, valorTotal, userId);
+          await db.prepare("UPDATE financeiro SET valor_total = valor_total + ?, saldo = saldo + ? WHERE usuario_id = ?")
+            .run(valorTotal, valorTotal, userId);
+        } catch (loopErr) {
+          console.error(`Erro ao processar participante ${p.nome}:`, loopErr);
         }
-        const userId = leaders.get(p.lider);
-        const valorTotal = calculatePrice(p.tipo, p.dias);
-        await insertPart.run(p.lider, p.nome, p.tipo, p.idade, p.dias, valorTotal, userId);
-        await db.prepare("UPDATE financeiro SET valor_total = valor_total + ?, saldo = saldo + ? WHERE usuario_id = ?")
-          .run(valorTotal, valorTotal, userId);
       }
       console.log("Seeding de participantes concluído.");
     }
@@ -262,7 +288,7 @@ export const initDb = async () => {
       const user = await db.prepare("SELECT id FROM usuarios WHERE nome = ?").get(pay.lider);
       if (user) {
         const userId = user.id;
-        await db.prepare("INSERT INTO pagamentos (usuario_id, valor, data_pagamento) VALUES (?, ?, ?)")
+        await db.prepare("INSERT OR IGNORE INTO pagamentos (usuario_id, valor, data_pagamento) VALUES (?, ?, ?)")
           .run(userId, pay.valor, pay.data);
         
         await db.prepare(`
