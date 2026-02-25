@@ -193,12 +193,18 @@ async function startServer() {
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({ server: { middlewareMode: true }, appType: "spa" });
     app.use(vite.middlewares);
-    app.listen(PORT, "0.0.0.0", () => console.log(`Server running on http://localhost:${PORT}`));
   } else {
     const __dirname = path.resolve();
     app.use(express.static(path.join(__dirname, "dist")));
     app.get("*", (req, res) => res.sendFile(path.join(__dirname, "dist", "index.html")));
   }
+
+  // In AI Studio/Local, we MUST use port 3000. In Render, we use process.env.PORT.
+  const finalPort = process.env.NODE_ENV === "production" ? (Number(process.env.PORT) || 3000) : 3000;
+  
+  app.listen(finalPort, "0.0.0.0", () => {
+    console.log(`Server running on port ${finalPort}`);
+  });
 }
 
 startServer();
