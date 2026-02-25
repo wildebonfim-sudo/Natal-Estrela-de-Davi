@@ -1,6 +1,13 @@
 import Database from "better-sqlite3";
+import path from "path";
+import fs from "fs";
 
-const db = new Database("database.db");
+const isVercel = process.env.VERCEL === "1";
+const dbPath = isVercel ? path.join("/tmp", "database.db") : "database.db";
+
+// If on Vercel, we might want to copy the initial database if it exists, 
+// but since we have a seed function, it's better to just let it initialize.
+const db = new Database(dbPath);
 
 export const initDb = () => {
   db.exec(`
