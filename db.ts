@@ -1,16 +1,60 @@
+import { createClient } from "@libsql/client";
 import Database from "better-sqlite3";
 import path from "path";
 import fs from "fs";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 const isVercel = process.env.VERCEL === "1";
-const dbPath = isVercel ? path.join("/tmp", "database.db") : "database.db";
+const isRender = process.env.RENDER === "true";
+const tursoUrl = process.env.TURSO_DATABASE_URL;
+const tursoToken = process.env.TURSO_AUTH_TOKEN;
 
-// If on Vercel, we might want to copy the initial database if it exists, 
-// but since we have a seed function, it's better to just let it initialize.
-const db = new Database(dbPath);
+// Interface to unify better-sqlite3 and libsql
+interface DbClient {
+  prepare: (sql: string) => any;
+  exec: (sql: string) => void;
+}
 
-export const initDb = () => {
-  db.exec(`
+let db: DbClient;
+
+if (tursoUrl && tursoToken) {
+  // Use Turso (Cloud SQLite) - 100% Free and Persistent
+  const client = createClient({
+    url: tursoUrl,
+    authToken: tursoToken,
+  });
+
+  db = {
+    prepare: (sql: string) => ({
+      run: (...args: any[]) => client.execute({ sql, args }),
+      get: async (...args: any[]) => {
+        const res = await client.execute({ sql, args });
+        return res.rows[0];
+      },
+      all: async (...args: any[]) => {
+        const res = await client.execute({ sql, args });
+        return res.rows;
+      }
+    }),
+    exec: (sql: string) => client.execute(sql),
+  } as any;
+} else {
+  // Use Local SQLite
+  let dbPath = "database.db";
+  if (isVercel) {
+    dbPath = path.join("/tmp", "database.db");
+  } else if (isRender && fs.existsSync("/data")) {
+    dbPath = path.join("/data", "database.db");
+  }
+  
+  const localDb = new Database(dbPath);
+  db = localDb as any;
+}
+
+export const initDb = async () => {
+  const sql = `
     CREATE TABLE IF NOT EXISTS usuarios (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       nome TEXT NOT NULL,
@@ -50,7 +94,13 @@ export const initDb = () => {
       status TEXT DEFAULT 'Pendente',
       FOREIGN KEY (usuario_id) REFERENCES usuarios (id)
     );
-  `);
+  `;
+
+  if (tursoUrl) {
+    await db.exec(sql);
+  } else {
+    (db as any).exec(sql);
+  }
 
   const calculatePrice = (type: string, days: number) => {
     if (type === 'Isento') return 0;
@@ -104,27 +154,30 @@ export const initDb = () => {
     { lider: "Daiana", nome: "Larissa", tipo: "Adulto", idade: 19, dias: 4 },
   ];
 
-  const checkSeeded = db.prepare("SELECT COUNT(*) as count FROM participantes").get().count;
+  const checkRes = await db.prepare("SELECT COUNT(*) as count FROM participantes").get();
+  const checkSeeded = checkRes.count || checkRes['COUNT(*)'];
+
   if (checkSeeded === 0) {
     const insertUser = db.prepare("INSERT INTO usuarios (nome, tipo_usuario, lider_familia) VALUES (?, ?, ?)");
     const insertPart = db.prepare("INSERT INTO participantes (lider, nome, tipo, idade, dias, valor_total, usuario_id) VALUES (?, ?, ?, ?, ?, ?, ?)");
     const insertFin = db.prepare("INSERT INTO financeiro (usuario_id, valor_total, valor_pago, saldo, status) VALUES (?, ?, ?, ?, ?)");
 
-    insertUser.run("Administrador", "admin", "nao");
+    await insertUser.run("Administrador", "admin", "nao");
 
     const leaders = new Map();
-    seedParticipants.forEach(p => {
+    for (const p of seedParticipants) {
       if (!leaders.has(p.lider)) {
-        const res = insertUser.run(p.lider, "participante", "sim");
-        leaders.set(p.lider, res.lastInsertRowid);
-        insertFin.run(res.lastInsertRowid, 0, 0, 0, "Pendente");
+        const res = await insertUser.run(p.lider, "participante", "sim");
+        const lastId = res.lastInsertRowid || res.lastInsertId;
+        leaders.set(p.lider, lastId);
+        await insertFin.run(lastId, 0, 0, 0, "Pendente");
       }
       const userId = leaders.get(p.lider);
       const valorTotal = calculatePrice(p.tipo, p.dias);
-      insertPart.run(p.lider, p.nome, p.tipo, p.idade, p.dias, valorTotal, userId);
-      db.prepare("UPDATE financeiro SET valor_total = valor_total + ?, saldo = saldo + ? WHERE usuario_id = ?")
+      await insertPart.run(p.lider, p.nome, p.tipo, p.idade, p.dias, valorTotal, userId);
+      await db.prepare("UPDATE financeiro SET valor_total = valor_total + ?, saldo = saldo + ? WHERE usuario_id = ?")
         .run(valorTotal, valorTotal, userId);
-    });
+    }
   }
 
   // Seed Official Payments
@@ -155,30 +208,32 @@ export const initDb = () => {
     { lider: "Daiana", valor: 200, data: "2026-02-11" },
   ];
 
-  // Clear existing payments and reset financeiro to ensure official data is correct
-  db.prepare("DELETE FROM pagamentos").run();
-  db.prepare("UPDATE financeiro SET valor_pago = 0, saldo = valor_total, status = 'Pendente'").run();
-
-  officialPayments.forEach(pay => {
-    const user = db.prepare("SELECT id FROM usuarios WHERE nome = ?").get(pay.lider) as any;
-    if (user) {
-      db.prepare("INSERT INTO pagamentos (usuario_id, valor, data_pagamento) VALUES (?, ?, ?)")
-        .run(user.id, pay.valor, pay.data);
-      
-      // Update financeiro
-      db.prepare(`
-        UPDATE financeiro 
-        SET valor_pago = valor_pago + ?, 
-            saldo = valor_total - (valor_pago + ?),
-            status = CASE 
-              WHEN (valor_total - (valor_pago + ?)) <= 0 THEN 'Quitado'
-              WHEN (valor_pago + ?) > 0 THEN 'Parcial'
-              ELSE 'Pendente'
-            END
-        WHERE usuario_id = ?
-      `).run(pay.valor, pay.valor, pay.valor, pay.valor, user.id);
+  // Only seed payments if none exist to avoid duplicates on cloud
+  const payCountRes = await db.prepare("SELECT COUNT(*) as count FROM pagamentos").get();
+  const payCount = payCountRes.count || payCountRes['COUNT(*)'];
+  
+  if (payCount === 0) {
+    for (const pay of officialPayments) {
+      const user = await db.prepare("SELECT id FROM usuarios WHERE nome = ?").get(pay.lider);
+      if (user) {
+        const userId = user.id;
+        await db.prepare("INSERT INTO pagamentos (usuario_id, valor, data_pagamento) VALUES (?, ?, ?)")
+          .run(userId, pay.valor, pay.data);
+        
+        await db.prepare(`
+          UPDATE financeiro 
+          SET valor_pago = valor_pago + ?, 
+              saldo = valor_total - (valor_pago + ?),
+              status = CASE 
+                WHEN (valor_total - (valor_pago + ?)) <= 0 THEN 'Quitado'
+                WHEN (valor_pago + ?) > 0 THEN 'Parcial'
+                ELSE 'Pendente'
+              END
+          WHERE usuario_id = ?
+        `).run(pay.valor, pay.valor, pay.valor, pay.valor, userId);
+      }
     }
-  });
+  }
 };
 
 export default db;
