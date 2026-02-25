@@ -6,7 +6,6 @@ import dotenv from "dotenv";
 import db, { initDb } from "./db.ts";
 
 dotenv.config();
-initDb();
 
 const app = express();
 const PORT = 3000;
@@ -14,6 +13,8 @@ const PORT = 3000;
 app.use(express.json({ limit: '10mb' }));
 
 async function startServer() {
+  await initDb();
+  
   // Simplified Routes (No Login)
   app.get("/api/users", (req, res) => {
     const users = db.prepare("SELECT * FROM usuarios").all();

@@ -28,14 +28,31 @@ if (tursoUrl && tursoToken) {
 
   db = {
     prepare: (sql: string) => ({
-      run: (...args: any[]) => client.execute({ sql, args }),
+      run: async (...args: any[]) => {
+        try {
+          return await client.execute({ sql, args });
+        } catch (e) {
+          console.error("Turso Run Error:", e);
+          throw e;
+        }
+      },
       get: async (...args: any[]) => {
-        const res = await client.execute({ sql, args });
-        return res.rows[0];
+        try {
+          const res = await client.execute({ sql, args });
+          return res.rows[0];
+        } catch (e) {
+          console.error("Turso Get Error:", e);
+          return null;
+        }
       },
       all: async (...args: any[]) => {
-        const res = await client.execute({ sql, args });
-        return res.rows;
+        try {
+          const res = await client.execute({ sql, args });
+          return res.rows;
+        } catch (e) {
+          console.error("Turso All Error:", e);
+          return [];
+        }
       }
     }),
     exec: (sql: string) => client.execute(sql),
