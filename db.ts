@@ -86,54 +86,8 @@ if (tursoUrl && tursoToken) {
 }
 
 export const initDb = async () => {
-  const sql = `
-    CREATE TABLE IF NOT EXISTS usuarios (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      nome TEXT NOT NULL,
-      email TEXT UNIQUE,
-      senha TEXT,
-      tipo_usuario TEXT DEFAULT 'participante',
-      lider_familia TEXT DEFAULT 'nao'
-    );
-
-    CREATE TABLE IF NOT EXISTS participantes (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      lider TEXT NOT NULL,
-      nome TEXT NOT NULL,
-      tipo TEXT NOT NULL,
-      idade INTEGER NOT NULL,
-      dias INTEGER NOT NULL,
-      valor_total REAL NOT NULL,
-      usuario_id INTEGER,
-      FOREIGN KEY (usuario_id) REFERENCES usuarios (id)
-    );
-
-    CREATE TABLE IF NOT EXISTS pagamentos (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      usuario_id INTEGER NOT NULL,
-      valor REAL NOT NULL,
-      data_pagamento TEXT NOT NULL,
-      arquivo_comprovante TEXT,
-      status_validacao TEXT DEFAULT 'validado',
-      FOREIGN KEY (usuario_id) REFERENCES usuarios (id)
-    );
-
-    CREATE TABLE IF NOT EXISTS financeiro (
-      usuario_id INTEGER PRIMARY KEY,
-      valor_total REAL DEFAULT 0,
-      valor_pago REAL DEFAULT 0,
-      saldo REAL DEFAULT 0,
-      status TEXT DEFAULT 'Pendente',
-      FOREIGN KEY (usuario_id) REFERENCES usuarios (id)
-    );
-  `;
-
-  if (tursoUrl) {
-    await db.exec(sql);
-  } else {
-    (db as any).exec(sql);
-  }
-
+  console.log("Iniciando inicialização do banco de dados...");
+  
   const calculatePrice = (type: string, days: number) => {
     if (type === 'Isento') return 0;
     if (type === 'Adolescente') {
@@ -186,30 +140,89 @@ export const initDb = async () => {
     { lider: "Daiana", nome: "Larissa", tipo: "Adulto", idade: 19, dias: 4 },
   ];
 
-  const checkRes = await db.prepare("SELECT COUNT(*) as count FROM participantes").get();
-  const checkSeeded = checkRes.count || checkRes['COUNT(*)'];
+  try {
+    await db.exec(`
+      CREATE TABLE IF NOT EXISTS usuarios (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nome TEXT NOT NULL,
+        email TEXT UNIQUE,
+        senha TEXT,
+        tipo_usuario TEXT DEFAULT 'participante',
+        lider_familia TEXT DEFAULT 'nao'
+      );
 
-  if (checkSeeded === 0) {
-    const insertUser = db.prepare("INSERT INTO usuarios (nome, tipo_usuario, lider_familia) VALUES (?, ?, ?)");
-    const insertPart = db.prepare("INSERT INTO participantes (lider, nome, tipo, idade, dias, valor_total, usuario_id) VALUES (?, ?, ?, ?, ?, ?, ?)");
-    const insertFin = db.prepare("INSERT INTO financeiro (usuario_id, valor_total, valor_pago, saldo, status) VALUES (?, ?, ?, ?, ?)");
+      CREATE TABLE IF NOT EXISTS participantes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        lider TEXT NOT NULL,
+        nome TEXT NOT NULL,
+        tipo TEXT NOT NULL,
+        idade INTEGER NOT NULL,
+        dias INTEGER NOT NULL,
+        valor_total REAL NOT NULL,
+        usuario_id INTEGER,
+        FOREIGN KEY (usuario_id) REFERENCES usuarios (id)
+      );
 
-    await insertUser.run("Administrador", "admin", "nao");
+      CREATE TABLE IF NOT EXISTS pagamentos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        usuario_id INTEGER NOT NULL,
+        valor REAL NOT NULL,
+        data_pagamento TEXT NOT NULL,
+        arquivo_comprovante TEXT,
+        status_validacao TEXT DEFAULT 'validado',
+        FOREIGN KEY (usuario_id) REFERENCES usuarios (id)
+      );
 
-    const leaders = new Map();
-    for (const p of seedParticipants) {
-      if (!leaders.has(p.lider)) {
-        const res = await insertUser.run(p.lider, "participante", "sim");
-        const lastId = res.lastInsertRowid || res.lastInsertId;
-        leaders.set(p.lider, lastId);
-        await insertFin.run(lastId, 0, 0, 0, "Pendente");
+      CREATE TABLE IF NOT EXISTS financeiro (
+        usuario_id INTEGER PRIMARY KEY,
+        valor_total REAL DEFAULT 0,
+        valor_pago REAL DEFAULT 0,
+        saldo REAL DEFAULT 0,
+        status TEXT DEFAULT 'Pendente',
+        FOREIGN KEY (usuario_id) REFERENCES usuarios (id)
+      );
+    `);
+    console.log("Tabelas verificadas/criadas.");
+
+    const checkRes = await db.prepare("SELECT COUNT(*) as count FROM usuarios").get();
+    const checkSeeded = checkRes ? (checkRes.count ?? checkRes['COUNT(*)'] ?? 0) : 0;
+
+    console.log(`Usuários encontrados no banco: ${checkSeeded}`);
+
+    if (Number(checkSeeded) === 0) {
+      console.log("Banco vazio. Iniciando seeding de dados oficiais...");
+      const insertUser = db.prepare("INSERT INTO usuarios (nome, tipo_usuario, lider_familia) VALUES (?, ?, ?)");
+      const insertPart = db.prepare("INSERT INTO participantes (lider, nome, tipo, idade, dias, valor_total, usuario_id) VALUES (?, ?, ?, ?, ?, ?, ?)");
+      const insertFin = db.prepare("INSERT INTO financeiro (usuario_id, valor_total, valor_pago, saldo, status) VALUES (?, ?, ?, ?, ?)");
+
+      await insertUser.run("Administrador", "admin", "nao");
+
+      const leaders = new Map();
+      for (const p of seedParticipants) {
+        if (!leaders.has(p.lider)) {
+          const res = await insertUser.run(p.lider, "participante", "sim");
+          const lastId = res.lastInsertRowid || res.lastInsertId || (res.rowsAffected > 0 ? leaders.size + 2 : null); 
+          
+          let actualId = lastId;
+          if (!actualId) {
+            const newUser = await db.prepare("SELECT id FROM usuarios WHERE nome = ?").get(p.lider);
+            actualId = newUser?.id;
+          }
+
+          leaders.set(p.lider, actualId);
+          await insertFin.run(actualId, 0, 0, 0, "Pendente");
+        }
+        const userId = leaders.get(p.lider);
+        const valorTotal = calculatePrice(p.tipo, p.dias);
+        await insertPart.run(p.lider, p.nome, p.tipo, p.idade, p.dias, valorTotal, userId);
+        await db.prepare("UPDATE financeiro SET valor_total = valor_total + ?, saldo = saldo + ? WHERE usuario_id = ?")
+          .run(valorTotal, valorTotal, userId);
       }
-      const userId = leaders.get(p.lider);
-      const valorTotal = calculatePrice(p.tipo, p.dias);
-      await insertPart.run(p.lider, p.nome, p.tipo, p.idade, p.dias, valorTotal, userId);
-      await db.prepare("UPDATE financeiro SET valor_total = valor_total + ?, saldo = saldo + ? WHERE usuario_id = ?")
-        .run(valorTotal, valorTotal, userId);
+      console.log("Seeding de participantes concluído.");
     }
+  } catch (err) {
+    console.error("Erro durante initDb:", err);
+    throw err;
   }
 
   // Seed Official Payments
