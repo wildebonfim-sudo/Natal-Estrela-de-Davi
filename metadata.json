@@ -1,0 +1,7 @@
+{
+  "name": "Portal Natal - Sítio Estrela de Davi",
+  "description": "Sistema de controle financeiro e portal de participantes para o evento de Natal no Sítio Estrela de Davi.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
