@@ -165,10 +165,10 @@ export default function App() {
           <div className="flex justify-between h-16 items-center">
             <div className="flex items-center gap-2">
               <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-emerald-200">
-                <Home size={20} />
+                <Calendar size={20} />
               </div>
               <div>
-                <h1 className="text-lg font-bold tracking-tight text-stone-800 leading-none">Sítio Estrela de Davi</h1>
+                <h1 className="text-lg font-bold tracking-tight text-stone-800 leading-none">Natal 2026</h1>
                 <p className="text-[10px] uppercase tracking-widest text-stone-400 font-semibold mt-1">Portal do Participante</p>
               </div>
             </div>
@@ -192,13 +192,28 @@ export default function App() {
 
 function UserSelector({ users, onSelect }: { users: User[], onSelect: (u: User) => void }) {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-stone-50 p-4">
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-white p-8 rounded-3xl shadow-xl w-full max-w-md border border-stone-100">
+    <div className="min-h-screen flex items-center justify-center bg-stone-50 p-4 relative overflow-hidden">
+      {/* Background Image/Preview */}
+      <div className="absolute inset-0 z-0 opacity-20">
+        <img 
+          src="https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&q=80&w=2000" 
+          alt="Sítio Preview" 
+          className="w-full h-full object-cover"
+          referrerPolicy="no-referrer"
+        />
+        <div className="absolute inset-0 bg-gradient-to-b from-stone-50/0 via-stone-50/50 to-stone-50"></div>
+      </div>
+
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }} 
+        animate={{ opacity: 1, y: 0 }} 
+        className="bg-white/90 backdrop-blur-md p-8 rounded-3xl shadow-2xl w-full max-w-md border border-white/50 relative z-10"
+      >
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-emerald-600 rounded-2xl flex items-center justify-center text-white mx-auto mb-4 shadow-xl shadow-emerald-100">
-            <Users size={32} />
+          <div className="w-20 h-20 bg-emerald-600 rounded-2xl flex items-center justify-center text-white mx-auto mb-4 shadow-xl shadow-emerald-100">
+            <Calendar size={40} />
           </div>
-          <h2 className="text-2xl font-bold text-stone-800">Quem é você?</h2>
+          <h2 className="text-2xl font-black text-stone-800 tracking-tight">Natal 2026</h2>
           <p className="text-stone-500 text-sm mt-1">Selecione seu perfil para acessar o portal</p>
         </div>
         

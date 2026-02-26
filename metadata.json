@@ -1,6 +1,6 @@
 {
-  "name": "Portal Natal - Sítio Estrela de Davi",
-  "description": "Sistema de controle financeiro e portal de participantes para o evento de Natal no Sítio Estrela de Davi.",
+  "name": "Natal 2026",
+  "description": "Portal de Gestão e Participantes - Natal em Família 2026",
   "requestFramePermissions": [
     "camera"
   ]
