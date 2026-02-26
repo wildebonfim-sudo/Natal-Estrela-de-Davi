@@ -180,6 +180,7 @@ export const initDb = async () => {
         data_pagamento TEXT NOT NULL,
         arquivo_comprovante TEXT,
         status_validacao TEXT DEFAULT 'validado',
+        visto_por_admin INTEGER DEFAULT 0,
         FOREIGN KEY (usuario_id) REFERENCES usuarios (id)
       );
 

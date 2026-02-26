@@ -22,7 +22,9 @@ import {
   MapPin,
   Calendar,
   Clock,
-  DollarSign
+  DollarSign,
+  Download,
+  Bell
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { GoogleGenAI } from "@google/genai";
@@ -227,6 +229,7 @@ function ParticipantDashboard({ user }: { user: User }) {
   const [processingReceipt, setProcessingReceipt] = useState(false);
   const [showAddMember, setShowAddMember] = useState(false);
   const [showEditAge, setShowEditAge] = useState<{ id: number, nome: string, idade: number } | null>(null);
+  const [showReceipt, setShowReceipt] = useState<string | null>(null);
   const [newMember, setNewMember] = useState({ nome: '', idade: 18, tipo: 'Adulto', dias: 4 });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -263,7 +266,7 @@ function ParticipantDashboard({ user }: { user: User }) {
     const res = await fetch(`/api/participant/${showEditAge.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ idade: showEditAge.idade })
+      body: JSON.stringify({ idade: showEditAge.idade, nome: showEditAge.nome })
     });
     if (res.ok) {
       setShowEditAge(null);
@@ -317,7 +320,8 @@ function ParticipantDashboard({ user }: { user: User }) {
           body: JSON.stringify({
             userId: user.id,
             amount: result.amount,
-            date: result.date
+            date: result.date,
+            receiptData: base64
           })
         });
         
@@ -552,16 +556,21 @@ function ParticipantDashboard({ user }: { user: User }) {
                 <p className="text-stone-400 text-xs">Nenhum pagamento registrado.</p>
               </div>
             ) : (
-              payments.map(pay => (
-                <div key={pay.id} className="p-4 flex justify-between items-center">
+              payments.map(p => (
+                <div 
+                  key={p.id} 
+                  onClick={() => p.arquivo_comprovante && setShowReceipt(p.arquivo_comprovante)}
+                  className={`p-4 flex justify-between items-center ${p.arquivo_comprovante ? 'cursor-pointer hover:bg-stone-50' : ''}`}
+                >
                   <div>
-                    <p className="font-bold text-stone-800 text-sm">R$ {pay.valor.toLocaleString('pt-BR')}</p>
+                    <p className="font-bold text-stone-800 text-sm">R$ {p.valor.toLocaleString('pt-BR')}</p>
                     <p className="text-[10px] text-stone-400 font-medium uppercase tracking-wider mt-0.5">
-                      {pay.data_pagamento.split('-').reverse().join('/')}
+                      {p.data_pagamento.split('-').reverse().join('/')}
                     </p>
                   </div>
-                  <div className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full uppercase tracking-wider">
-                    <CheckCircle size={10} /> Validado
+                  <div className={`flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wider ${p.status_validacao === 'rejeitado' ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                    {p.status_validacao === 'rejeitado' ? <AlertTriangle size={10} /> : <CheckCircle size={10} />}
+                    {p.status_validacao === 'rejeitado' ? 'Rejeitado' : 'Validado'}
                   </div>
                 </div>
               ))
@@ -569,6 +578,44 @@ function ParticipantDashboard({ user }: { user: User }) {
           </div>
         </div>
       </div>
+
+      {/* Receipt View Modal */}
+      <AnimatePresence>
+        {showReceipt && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-stone-900/80 backdrop-blur-md">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden"
+            >
+              <div className="p-4 border-b border-stone-100 flex justify-between items-center">
+                <h3 className="font-bold text-stone-800">Comprovante de Pagamento</h3>
+                <button onClick={() => setShowReceipt(null)} className="p-2 text-stone-400 hover:text-stone-600">
+                  <Plus size={24} className="rotate-45" />
+                </button>
+              </div>
+              <div className="p-6 flex flex-col items-center gap-4">
+                <div className="w-full max-h-[60vh] overflow-auto rounded-xl border border-stone-100">
+                  <img 
+                    src={`data:image/png;base64,${showReceipt}`} 
+                    alt="Comprovante" 
+                    className="w-full h-auto"
+                  />
+                </div>
+                <a 
+                  href={`data:image/png;base64,${showReceipt}`} 
+                  download="comprovante.png"
+                  className="bg-stone-800 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-stone-900 transition-colors"
+                >
+                  <Download size={18} />
+                  Baixar Comprovante
+                </a>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Add Member Modal */}
       <AnimatePresence>
@@ -661,18 +708,25 @@ function ParticipantDashboard({ user }: { user: User }) {
               className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden"
             >
               <div className="p-6 border-b border-stone-100 flex justify-between items-center bg-stone-50/50">
-                <h3 className="font-bold text-stone-800">Editar Idade: {showEditAge.nome}</h3>
+                <h3 className="font-bold text-stone-800">Editar Participante: {showEditAge.nome}</h3>
                 <button onClick={() => setShowEditAge(null)} className="text-stone-400 hover:text-stone-600">
                   <Plus size={20} className="rotate-45" />
                 </button>
               </div>
               <form onSubmit={handleUpdateAge} className="p-6 space-y-4">
                 <div>
+                  <label className="block text-xs font-bold text-stone-400 uppercase tracking-wider mb-1 ml-1">Nome</label>
+                  <input 
+                    type="text" 
+                    required 
+                    className="w-full px-4 py-3 rounded-xl border border-stone-200 focus:ring-2 focus:ring-emerald-500 outline-none mb-4"
+                    value={showEditAge.nome}
+                    onChange={e => setShowEditAge({ ...showEditAge, nome: e.target.value })}
+                  />
                   <label className="block text-xs font-bold text-stone-400 uppercase tracking-wider mb-1 ml-1">Idade Atualizada</label>
                   <input 
                     type="number" 
                     required 
-                    autoFocus
                     className="w-full px-4 py-3 rounded-xl border border-stone-200 focus:ring-2 focus:ring-emerald-500 outline-none"
                     value={showEditAge.idade}
                     onChange={e => setShowEditAge({ ...showEditAge, idade: parseInt(e.target.value) })}
@@ -698,20 +752,24 @@ function ParticipantDashboard({ user }: { user: User }) {
 function AdminDashboard() {
   const [stats, setStats] = useState<any>(null);
   const [families, setFamilies] = useState<any[]>([]);
+  const [notifications, setNotifications] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddPayment, setShowAddPayment] = useState<number | null>(null);
   const [showAddMember, setShowAddMember] = useState<number | null>(null);
   const [showEditAge, setShowEditAge] = useState<{ id: number, nome: string, idade: number } | null>(null);
+  const [showReceipt, setShowReceipt] = useState<{ id: number, data: string, amount: number } | null>(null);
   const [manualPayment, setManualPayment] = useState({ amount: 0, date: new Date().toISOString().split('T')[0] });
   const [newMember, setNewMember] = useState({ nome: '', idade: 18, tipo: 'Adulto', dias: 4 });
 
   const fetchData = async () => {
-    const [statsRes, famRes] = await Promise.all([
+    const [statsRes, famRes, notifRes] = await Promise.all([
       fetch('/api/admin/stats'),
-      fetch('/api/admin/families')
+      fetch('/api/admin/families'),
+      fetch('/api/admin/notifications')
     ]);
     setStats(await statsRes.json());
     setFamilies(await famRes.json());
+    setNotifications(await notifRes.json());
     setLoading(false);
   };
 
@@ -760,12 +818,55 @@ function AdminDashboard() {
     const res = await fetch(`/api/participant/${showEditAge.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ idade: showEditAge.idade })
+      body: JSON.stringify({ idade: showEditAge.idade, nome: showEditAge.nome })
     });
     if (res.ok) {
       setShowEditAge(null);
       fetchData();
     }
+  };
+
+  const handleRejectPayment = async (id: number) => {
+    if (confirm('Deseja realmente rejeitar este pagamento? O valor será subtraído do saldo pago.')) {
+      const res = await fetch(`/api/payments/${id}/reject`, { method: 'POST' });
+      if (res.ok) {
+        setShowReceipt(null);
+        fetchData();
+      }
+    }
+  };
+
+  const handleDeletePayment = async (id: number) => {
+    if (confirm('Deseja realmente EXCLUIR DEFINITIVAMENTE este pagamento? Esta ação não pode ser desfeita.')) {
+      const res = await fetch(`/api/payments/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setShowReceipt(null);
+        fetchData();
+      }
+    }
+  };
+
+  const handleDeleteParticipant = async (id: number) => {
+    if (confirm('Deseja realmente remover este participante?')) {
+      const res = await fetch(`/api/participant/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        fetchData();
+      }
+    }
+  };
+
+  const handleDeleteFamily = async (id: number) => {
+    if (confirm('Deseja realmente EXCLUIR TODA ESTA FAMÍLIA? Todos os participantes e pagamentos serão removidos permanentemente.')) {
+      const res = await fetch(`/api/user/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        fetchData();
+      }
+    }
+  };
+
+  const handleMarkSeen = async (id: number) => {
+    await fetch(`/api/payments/${id}/mark-seen`, { method: 'POST' });
+    fetchData();
   };
 
   const calculateInstallment = (balance: number) => {
@@ -777,6 +878,27 @@ function AdminDashboard() {
 
   return (
     <div className="space-y-8">
+      {/* Notifications Bar */}
+      {notifications.length > 0 && (
+        <div className="bg-amber-50 border border-amber-100 p-4 rounded-2xl flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center">
+              <Bell size={20} />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-amber-800">{notifications.length} Novos Pagamentos para Revisar</p>
+              <p className="text-[10px] text-amber-600 font-medium uppercase tracking-wider">Verifique os comprovantes no histórico das famílias</p>
+            </div>
+          </div>
+          <button 
+            onClick={() => notifications.forEach(n => handleMarkSeen(n.id))}
+            className="text-xs font-bold text-amber-700 hover:underline"
+          >
+            Marcar todos como vistos
+          </button>
+        </div>
+      )}
+
       {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white p-6 rounded-2xl border border-stone-100 shadow-sm">
@@ -861,6 +983,13 @@ function AdminDashboard() {
                   >
                     <UserPlus size={18} />
                   </button>
+                  <button 
+                    onClick={() => handleDeleteFamily(fam.id)}
+                    className="p-2 bg-white border border-stone-200 rounded-xl text-stone-600 hover:border-red-500 hover:text-red-600 transition-all shadow-sm"
+                    title="Excluir Família"
+                  >
+                    <Trash2 size={18} />
+                  </button>
                 </div>
               </div>
             </div>
@@ -879,9 +1008,16 @@ function AdminDashboard() {
                         <button 
                           onClick={() => setShowEditAge({ id: m.id, nome: m.nome, idade: m.idade })}
                           className="p-1.5 text-stone-300 hover:text-emerald-500 transition-colors"
-                          title="Editar Idade"
+                          title="Editar Dados"
                         >
                           <History size={14} />
+                        </button>
+                        <button 
+                          onClick={() => handleDeleteParticipant(m.id)}
+                          className="p-1.5 text-stone-300 hover:text-red-500 transition-colors"
+                          title="Remover Participante"
+                        >
+                          <Trash2 size={14} />
                         </button>
                         {m.dias === 4 && <ShieldCheck size={14} className="text-amber-500" />}
                       </div>
@@ -898,9 +1034,17 @@ function AdminDashboard() {
                     <p className="text-[10px] text-stone-300 italic ml-1">Nenhum pagamento registrado</p>
                   ) : (
                     fam.payments.map((p: any) => (
-                      <div key={p.id} className="px-3 py-1.5 bg-emerald-50 border border-emerald-100 rounded-lg flex items-center gap-2">
-                        <span className="text-xs font-bold text-emerald-700">R$ {p.valor.toLocaleString('pt-BR')}</span>
-                        <span className="text-[10px] text-emerald-500 font-medium">{new Date(p.data_pagamento).toLocaleDateString('pt-BR')}</span>
+                      <div 
+                        key={p.id} 
+                        onClick={() => {
+                          if (p.visto_por_admin === 0) handleMarkSeen(p.id);
+                          setShowReceipt({ id: p.id, data: p.arquivo_comprovante, amount: p.valor });
+                        }}
+                        className={`px-3 py-1.5 rounded-lg flex items-center gap-2 cursor-pointer transition-all ${p.status_validacao === 'rejeitado' ? 'bg-red-50 border border-red-100' : p.visto_por_admin === 0 ? 'bg-amber-50 border border-amber-200 ring-2 ring-amber-100' : 'bg-emerald-50 border border-emerald-100 hover:bg-emerald-100'}`}
+                      >
+                        <span className={`text-xs font-bold ${p.status_validacao === 'rejeitado' ? 'text-red-700' : 'text-emerald-700'}`}>R$ {p.valor.toLocaleString('pt-BR')}</span>
+                        <span className={`text-[10px] font-medium ${p.status_validacao === 'rejeitado' ? 'text-red-500' : 'text-emerald-500'}`}>{p.data_pagamento.split('-').reverse().join('/')}</span>
+                        {p.arquivo_comprovante && <Upload size={10} className="text-stone-400" />}
                       </div>
                     ))
                   )}
@@ -911,7 +1055,76 @@ function AdminDashboard() {
         ))}
       </div>
 
-      {/* Manual Payment Modal */}
+      {/* Receipt View Modal */}
+      <AnimatePresence>
+        {showReceipt && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-stone-900/80 backdrop-blur-md">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden"
+            >
+              <div className="p-4 border-b border-stone-100 flex justify-between items-center">
+                <h3 className="font-bold text-stone-800">Comprovante: R$ {showReceipt.amount.toLocaleString('pt-BR')}</h3>
+                <button onClick={() => setShowReceipt(null)} className="p-2 text-stone-400 hover:text-stone-600">
+                  <Plus size={24} className="rotate-45" />
+                </button>
+              </div>
+              <div className="p-6 flex flex-col items-center gap-4">
+                {showReceipt.data ? (
+                  <>
+                    <div className="w-full max-h-[60vh] overflow-auto rounded-xl border border-stone-100">
+                      <img 
+                        src={`data:image/png;base64,${showReceipt.data}`} 
+                        alt="Comprovante" 
+                        className="w-full h-auto"
+                      />
+                    </div>
+                    <div className="flex flex-wrap gap-3 w-full">
+                      <a 
+                        href={`data:image/png;base64,${showReceipt.data}`} 
+                        download="comprovante.png"
+                        className="flex-1 min-w-[120px] bg-stone-800 text-white px-4 py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-stone-900 transition-colors"
+                      >
+                        <Download size={18} />
+                        Baixar
+                      </a>
+                      <button 
+                        onClick={() => handleRejectPayment(showReceipt.id)}
+                        className="flex-1 min-w-[120px] bg-red-50 text-red-600 px-4 py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-red-100 transition-colors"
+                      >
+                        <Trash2 size={18} />
+                        Rejeitar
+                      </button>
+                      <button 
+                        onClick={() => handleDeletePayment(showReceipt.id)}
+                        className="flex-1 min-w-[120px] bg-red-600 text-white px-4 py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-red-700 transition-colors"
+                      >
+                        <Trash2 size={18} />
+                        Excluir
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <div className="w-full">
+                    <div className="p-12 text-center text-stone-400 italic bg-stone-50 rounded-xl border border-stone-100 mb-4">
+                      Este pagamento foi lançado manualmente e não possui comprovante de imagem.
+                    </div>
+                    <button 
+                      onClick={() => handleDeletePayment(showReceipt.id)}
+                      className="w-full bg-red-600 text-white px-6 py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-red-700 transition-colors"
+                    >
+                      <Trash2 size={18} />
+                      Excluir Pagamento Definitivamente
+                    </button>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
       <AnimatePresence>
         {showAddPayment && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-stone-900/40 backdrop-blur-sm">
@@ -1050,18 +1263,25 @@ function AdminDashboard() {
               className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden"
             >
               <div className="p-6 border-b border-stone-100 flex justify-between items-center bg-stone-50/50">
-                <h3 className="font-bold text-stone-800">Editar Idade: {showEditAge.nome}</h3>
+                <h3 className="font-bold text-stone-800">Editar Participante: {showEditAge.nome}</h3>
                 <button onClick={() => setShowEditAge(null)} className="text-stone-400 hover:text-stone-600">
                   <Plus size={20} className="rotate-45" />
                 </button>
               </div>
               <form onSubmit={handleUpdateAge} className="p-6 space-y-4">
                 <div>
+                  <label className="block text-xs font-bold text-stone-400 uppercase tracking-wider mb-1 ml-1">Nome</label>
+                  <input 
+                    type="text" 
+                    required 
+                    className="w-full px-4 py-3 rounded-xl border border-stone-200 focus:ring-2 focus:ring-emerald-500 outline-none mb-4"
+                    value={showEditAge.nome}
+                    onChange={e => setShowEditAge({ ...showEditAge, nome: e.target.value })}
+                  />
                   <label className="block text-xs font-bold text-stone-400 uppercase tracking-wider mb-1 ml-1">Idade Atualizada</label>
                   <input 
                     type="number" 
                     required 
-                    autoFocus
                     className="w-full px-4 py-3 rounded-xl border border-stone-200 focus:ring-2 focus:ring-emerald-500 outline-none"
                     value={showEditAge.idade}
                     onChange={e => setShowEditAge({ ...showEditAge, idade: parseInt(e.target.value) })}

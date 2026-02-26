@@ -100,30 +100,52 @@ async function startServer() {
   });
 
   app.patch("/api/participant/:id", async (req, res) => {
-    const { idade } = req.body;
+    const { idade, nome } = req.body;
     try {
       const part = await db.prepare("SELECT * FROM participantes WHERE id = ?").get(req.params.id) as any;
       if (!part) return res.status(404).json({ error: "Participante não encontrado" });
 
+      const oldNome = part.nome;
+      const usuarioId = part.usuario_id;
+
+      // Check if this participant is the leader
+      const user = await db.prepare("SELECT * FROM usuarios WHERE id = ?").get(usuarioId) as any;
+      const isLeader = user && user.nome === oldNome;
+
       // Determine new type based on age
-      let newTipo = 'Adulto';
-      if (idade <= 9) newTipo = 'Isento';
-      else if (idade <= 17) newTipo = 'Adolescente';
+      let newTipo = part.tipo;
+      let newValorTotal = part.valor_total;
+      let diff = 0;
 
-      const newValorTotal = calculatePrice(newTipo, part.dias);
-      const diff = newValorTotal - part.valor_total;
+      if (idade !== undefined) {
+        newTipo = 'Adulto';
+        if (idade <= 9) newTipo = 'Isento';
+        else if (idade <= 17) newTipo = 'Adolescente';
 
-      await db.prepare("UPDATE participantes SET idade = ?, tipo = ?, valor_total = ? WHERE id = ?")
-        .run(idade, newTipo, newValorTotal, req.params.id);
+        newValorTotal = calculatePrice(newTipo, part.dias);
+        diff = newValorTotal - part.valor_total;
+      }
 
-      // Update financeiro
-      await db.prepare("UPDATE financeiro SET valor_total = valor_total + ?, saldo = saldo + ? WHERE usuario_id = ?")
-        .run(diff, diff, part.usuario_id);
+      await db.prepare("UPDATE participantes SET idade = ?, nome = ?, tipo = ?, valor_total = ? WHERE id = ?")
+        .run(idade ?? part.idade, nome ?? part.nome, newTipo, newValorTotal, req.params.id);
+
+      if (isLeader && nome && nome !== oldNome) {
+        // Update leader name in usuarios table
+        await db.prepare("UPDATE usuarios SET nome = ? WHERE id = ?").run(nome, usuarioId);
+        // Update leader name in all participants of this family
+        await db.prepare("UPDATE participantes SET lider = ? WHERE usuario_id = ?").run(nome, usuarioId);
+      }
+
+      if (diff !== 0) {
+        // Update financeiro
+        await db.prepare("UPDATE financeiro SET valor_total = valor_total + ?, saldo = saldo + ? WHERE usuario_id = ?")
+          .run(diff, diff, usuarioId);
+      }
 
       res.json({ success: true });
     } catch (e) {
       console.error(e);
-      res.status(500).json({ error: "Erro ao atualizar idade" });
+      res.status(500).json({ error: "Erro ao atualizar participante" });
     }
   });
 
@@ -145,10 +167,10 @@ async function startServer() {
   });
 
   app.post("/api/payments/save", async (req, res) => {
-    const { userId, amount, date } = req.body;
+    const { userId, amount, date, receiptData } = req.body;
     try {
-      await db.prepare("INSERT INTO pagamentos (usuario_id, valor, data_pagamento) VALUES (?, ?, ?)")
-        .run(userId, amount, date);
+      await db.prepare("INSERT INTO pagamentos (usuario_id, valor, data_pagamento, arquivo_comprovante, visto_por_admin) VALUES (?, ?, ?, ?, 0)")
+        .run(userId, amount, date, receiptData);
       
       // Get current finance to calculate new values accurately
       const fin = await db.prepare("SELECT * FROM financeiro WHERE usuario_id = ?").get(userId);
@@ -167,6 +189,104 @@ async function startServer() {
     } catch (e) {
       console.error(e);
       res.status(500).json({ error: "Erro ao salvar pagamento" });
+    }
+  });
+
+  app.post("/api/payments/:id/reject", async (req, res) => {
+    try {
+      const pay = await db.prepare("SELECT * FROM pagamentos WHERE id = ?").get(req.params.id) as any;
+      if (!pay) return res.status(404).json({ error: "Pagamento não encontrado" });
+      if (pay.status_validacao === 'rejeitado') return res.json({ success: true });
+
+      await db.prepare("UPDATE pagamentos SET status_validacao = 'rejeitado', visto_por_admin = 1 WHERE id = ?").run(req.params.id);
+
+      // Update financeiro (subtract the amount)
+      const fin = await db.prepare("SELECT * FROM financeiro WHERE usuario_id = ?").get(pay.usuario_id) as any;
+      if (fin) {
+        const novoPago = Math.max(0, (fin.valor_pago || 0) - pay.valor);
+        const novoSaldo = (fin.valor_total || 0) - novoPago;
+        let novoStatus = 'Pendente';
+        if (novoSaldo <= 0) novoStatus = 'Quitado';
+        else if (novoPago > 0) novoStatus = 'Parcial';
+
+        await db.prepare("UPDATE financeiro SET valor_pago = ?, saldo = ?, status = ? WHERE usuario_id = ?")
+          .run(novoPago, novoSaldo, novoStatus, pay.usuario_id);
+      }
+
+      res.json({ success: true });
+    } catch (e) {
+      console.error(e);
+      res.status(500).json({ error: "Erro ao rejeitar pagamento" });
+    }
+  });
+
+  app.post("/api/payments/:id/mark-seen", async (req, res) => {
+    try {
+      await db.prepare("UPDATE pagamentos SET visto_por_admin = 1 WHERE id = ?").run(req.params.id);
+      res.json({ success: true });
+    } catch (e) {
+      res.status(500).json({ error: "Erro ao marcar como visto" });
+    }
+  });
+
+  app.delete("/api/payments/:id", async (req, res) => {
+    try {
+      const pay = await db.prepare("SELECT * FROM pagamentos WHERE id = ?").get(req.params.id) as any;
+      if (!pay) return res.status(404).json({ error: "Pagamento não encontrado" });
+
+      await db.prepare("DELETE FROM pagamentos WHERE id = ?").run(req.params.id);
+
+      // Update financeiro (subtract the amount if it was validated or pending)
+      // If it was rejected, we already subtracted it, so we don't subtract again.
+      if (pay.status_validacao !== 'rejeitado') {
+        const fin = await db.prepare("SELECT * FROM financeiro WHERE usuario_id = ?").get(pay.usuario_id) as any;
+        if (fin) {
+          const novoPago = Math.max(0, (fin.valor_pago || 0) - pay.valor);
+          const novoSaldo = (fin.valor_total || 0) - novoPago;
+          let novoStatus = 'Pendente';
+          if (novoSaldo <= 0) novoStatus = 'Quitado';
+          else if (novoPago > 0) novoStatus = 'Parcial';
+
+          await db.prepare("UPDATE financeiro SET valor_pago = ?, saldo = ?, status = ? WHERE usuario_id = ?")
+            .run(novoPago, novoSaldo, novoStatus, pay.usuario_id);
+        }
+      }
+
+      res.json({ success: true });
+    } catch (e) {
+      console.error(e);
+      res.status(500).json({ error: "Erro ao excluir pagamento" });
+    }
+  });
+
+  app.get("/api/admin/notifications", async (req, res) => {
+    try {
+      const unread = await db.prepare(`
+        SELECT p.*, u.nome as pagador 
+        FROM pagamentos p 
+        JOIN usuarios u ON p.usuario_id = u.id 
+        WHERE p.visto_por_admin = 0 
+        ORDER BY p.data_pagamento DESC
+      `).all();
+      res.json(unread);
+    } catch (e) {
+      res.status(500).json({ error: "Erro ao buscar notificações" });
+    }
+  });
+
+  app.delete("/api/user/:id", async (req, res) => {
+    try {
+      const userId = req.params.id;
+      // Delete payments, participants, finance, and finally the user
+      await db.prepare("DELETE FROM pagamentos WHERE usuario_id = ?").run(userId);
+      await db.prepare("DELETE FROM participantes WHERE usuario_id = ?").run(userId);
+      await db.prepare("DELETE FROM financeiro WHERE usuario_id = ?").run(userId);
+      await db.prepare("DELETE FROM usuarios WHERE id = ?").run(userId);
+      
+      res.json({ success: true });
+    } catch (e) {
+      console.error(e);
+      res.status(500).json({ error: "Erro ao excluir família" });
     }
   });
 
