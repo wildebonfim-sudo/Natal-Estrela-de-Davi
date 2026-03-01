@@ -193,21 +193,21 @@ export default function App() {
 function UserSelector({ users, onSelect }: { users: User[], onSelect: (u: User) => void }) {
   return (
     <div className="min-h-screen flex items-center justify-center bg-stone-50 p-4 relative overflow-hidden">
-      {/* Background Image/Preview */}
-      <div className="absolute inset-0 z-0 opacity-20">
+      {/* Background Image/Preview - Matching the user's pool photo style */}
+      <div className="absolute inset-0 z-0">
         <img 
-          src="https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&q=80&w=2000" 
+          src="https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&q=80&w=2000" 
           alt="Sítio Preview" 
-          className="w-full h-full object-cover"
+          className="w-full h-full object-cover opacity-40"
           referrerPolicy="no-referrer"
         />
-        <div className="absolute inset-0 bg-gradient-to-b from-stone-50/0 via-stone-50/50 to-stone-50"></div>
+        <div className="absolute inset-0 bg-gradient-to-b from-stone-50/10 via-stone-50/40 to-stone-50"></div>
       </div>
 
       <motion.div 
         initial={{ opacity: 0, y: 20 }} 
         animate={{ opacity: 1, y: 0 }} 
-        className="bg-white/90 backdrop-blur-md p-8 rounded-3xl shadow-2xl w-full max-w-md border border-white/50 relative z-10"
+        className="bg-white/95 backdrop-blur-md p-8 rounded-3xl shadow-2xl w-full max-w-md border border-white/50 relative z-10"
       >
         <div className="text-center mb-8">
           <div className="w-20 h-20 bg-emerald-600 rounded-2xl flex items-center justify-center text-white mx-auto mb-4 shadow-xl shadow-emerald-100">
@@ -893,6 +893,17 @@ function AdminDashboard() {
 
   return (
     <div className="space-y-8">
+      {/* Persistence Warning for Admin */}
+      {!process.env.TURSO_DATABASE_URL && (
+        <div className="bg-red-50 border border-red-100 p-4 rounded-2xl flex items-center gap-3">
+          <AlertTriangle className="text-red-500" size={20} />
+          <div>
+            <p className="text-xs font-bold text-red-800 uppercase tracking-wider">Aviso de Persistência</p>
+            <p className="text-[10px] text-red-600 font-medium">Os dados atuais são temporários e serão perdidos se o site ficar inativo. Configure o Turso para salvar permanentemente.</p>
+          </div>
+        </div>
+      )}
+
       {/* Notifications Bar */}
       {notifications.length > 0 && (
         <div className="bg-amber-50 border border-amber-100 p-4 rounded-2xl flex items-center justify-between">

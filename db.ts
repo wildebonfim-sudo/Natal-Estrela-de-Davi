@@ -66,8 +66,15 @@ if (tursoUrl && tursoToken) {
   let dbPath = "database.db";
   if (isVercel) {
     dbPath = path.join("/tmp", "database.db");
-  } else if (isRender && fs.existsSync("/data")) {
-    dbPath = path.join("/data", "database.db");
+  } else if (isRender) {
+    // On Render, we check for a persistent disk mount at /data
+    // If it doesn't exist, the database will be ephemeral (lost on restart)
+    if (fs.existsSync("/data")) {
+      dbPath = path.join("/data", "database.db");
+    } else {
+      console.warn("⚠️ AVISO: Rodando no Render sem Disco Persistente. Os dados serão perdidos ao reiniciar.");
+      console.warn("Para persistência gratuita, configure as variáveis TURSO_DATABASE_URL e TURSO_AUTH_TOKEN.");
+    }
   }
   
   const client = createClient({
