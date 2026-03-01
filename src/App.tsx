@@ -939,12 +939,14 @@ function AdminDashboard() {
           </div>
         </div>
         <div className="bg-white p-6 rounded-2xl border border-stone-100 shadow-sm">
-          <p className="text-xs font-bold text-stone-400 uppercase tracking-wider mb-2">Total Pendente</p>
+          <p className="text-xs font-bold text-stone-400 uppercase tracking-wider mb-2">Falta para a Meta</p>
           <p className="text-2xl font-bold text-orange-600">R$ {stats.totalPending.toLocaleString('pt-BR')}</p>
+          <p className="text-[10px] text-stone-400 mt-1">Restante para os R$ 16k</p>
         </div>
         <div className="bg-white p-6 rounded-2xl border border-stone-100 shadow-sm">
-          <p className="text-xs font-bold text-stone-400 uppercase tracking-wider mb-2">Participantes</p>
-          <p className="text-2xl font-bold text-stone-800">{stats.vagasOcupadas}</p>
+          <p className="text-xs font-bold text-stone-400 uppercase tracking-wider mb-2">Dívida das Famílias</p>
+          <p className="text-2xl font-bold text-red-600">R$ {stats.totalToReceiveFromFamilies.toLocaleString('pt-BR')}</p>
+          <p className="text-[10px] text-stone-400 mt-1">Soma de todos os saldos</p>
         </div>
         <div className="bg-white p-6 rounded-2xl border border-stone-100 shadow-sm">
           <div className="flex justify-between items-center mb-2">

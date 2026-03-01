@@ -292,14 +292,23 @@ async function startServer() {
 
   app.get("/api/admin/stats", async (req, res) => {
     const statsRes = await db.prepare("SELECT SUM(valor_pago) as sum FROM financeiro").get();
-    const pendingRes = await db.prepare("SELECT SUM(saldo) as sum FROM financeiro").get();
+    const balancesRes = await db.prepare("SELECT SUM(saldo) as sum FROM financeiro").get();
     const participantsRes = await db.prepare("SELECT COUNT(*) as count FROM participantes WHERE tipo != 'Isento'").get();
     
     const totalCollected = statsRes.sum || 0;
-    const totalPending = pendingRes.sum || 0;
+    // Falta para a Meta do Sítio (16.000)
+    const totalPending = Math.max(0, 16000 - totalCollected);
+    // Total que as famílias ainda devem (Soma de todos os saldos individuais)
+    const totalToReceiveFromFamilies = balancesRes.sum || 0;
     const totalParticipants = participantsRes.count;
     
-    res.json({ totalCollected, totalPending, vagasOcupadas: totalParticipants, vagasTotais: 55 });
+    res.json({ 
+      totalCollected, 
+      totalPending, 
+      totalToReceiveFromFamilies, 
+      vagasOcupadas: totalParticipants, 
+      vagasTotais: 55 
+    });
   });
 
   app.get("/api/admin/participants", async (req, res) => {
