@@ -222,13 +222,13 @@ function UserSelector({ users, onSelect }: { users: User[], onSelect: (u: User) 
             <button 
               key={u.id}
               onClick={() => onSelect(u)}
-              className="w-full text-left p-4 rounded-xl border border-stone-100 hover:border-emerald-500 hover:bg-emerald-50 transition-all flex justify-between items-center group"
+              className="w-full text-left p-4 rounded-xl border border-stone-100 hover:border-emerald-500 hover:bg-emerald-50 transition-all flex justify-between items-center group min-w-0"
             >
-              <div>
-                <p className="font-bold text-stone-800 group-hover:text-emerald-700">{u.nome}</p>
-                <p className="text-[10px] uppercase tracking-widest text-stone-400 font-bold">{u.tipo_usuario === 'admin' ? 'Administrador' : 'Líder de Família'}</p>
+              <div className="min-w-0 flex-1 mr-2">
+                <p className="font-bold text-stone-800 group-hover:text-emerald-700 truncate">{u.nome}</p>
+                <p className="text-[10px] uppercase tracking-widest text-stone-400 font-bold truncate">{u.tipo_usuario === 'admin' ? 'Administrador' : 'Líder de Família'}</p>
               </div>
-              <ChevronRight size={16} className="text-stone-300 group-hover:text-emerald-500" />
+              <ChevronRight size={16} className="text-stone-300 group-hover:text-emerald-500 shrink-0" />
             </button>
           ))}
         </div>
@@ -375,14 +375,14 @@ function ParticipantDashboard({ user }: { user: User }) {
       {/* Left Column: Summary & Payments */}
       <div className="lg:col-span-2 space-y-8">
         {/* Event Info Card */}
-        <div className="bg-emerald-900 text-white p-6 rounded-3xl shadow-xl relative overflow-hidden">
+        <div className="bg-emerald-900 text-white p-5 sm:p-6 rounded-3xl shadow-xl relative overflow-hidden">
           <div className="relative z-10">
-            <div className="flex items-center gap-2 mb-4">
-              <MapPin size={16} className="text-emerald-400" />
-              <span className="text-xs font-bold uppercase tracking-widest text-emerald-200">Suzano – SP</span>
+            <div className="flex items-center gap-2 mb-3 sm:mb-4">
+              <MapPin size={14} className="text-emerald-400" />
+              <span className="text-[10px] sm:text-xs font-bold uppercase tracking-widest text-emerald-200">Suzano – SP</span>
             </div>
-            <h2 className="text-3xl font-bold mb-2">Natal – Sítio Estrela de Davi</h2>
-            <div className="flex flex-wrap gap-4 text-sm text-emerald-100/80">
+            <h2 className="text-2xl sm:text-3xl font-bold mb-2 leading-tight">Natal – Sítio Estrela de Davi</h2>
+            <div className="flex flex-col sm:flex-row flex-wrap gap-2 sm:gap-4 text-xs sm:text-sm text-emerald-100/80">
               <div className="flex items-center gap-1.5">
                 <Calendar size={14} />
                 <span>24/12 a 27/12</span>
@@ -393,7 +393,7 @@ function ParticipantDashboard({ user }: { user: User }) {
               </div>
             </div>
           </div>
-          <div className="absolute -right-10 -bottom-10 w-48 h-48 bg-emerald-800 rounded-full blur-3xl opacity-50"></div>
+          <div className="absolute -right-10 -bottom-10 w-32 h-32 sm:w-48 sm:h-48 bg-emerald-800 rounded-full blur-3xl opacity-50"></div>
         </div>
 
         {/* Payment Alert */}
@@ -408,23 +408,23 @@ function ParticipantDashboard({ user }: { user: User }) {
         </div>
 
         {/* Financial Summary */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-white p-6 rounded-2xl border border-stone-100 shadow-sm">
-            <p className="text-xs font-bold text-stone-400 uppercase tracking-wider mb-2">Total Devido</p>
-            <p className="text-2xl font-bold text-stone-800">R$ {finance.valor_total.toLocaleString('pt-BR')}</p>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <div className="bg-white p-4 sm:p-6 rounded-2xl border border-stone-100 shadow-sm">
+            <p className="text-[10px] sm:text-xs font-bold text-stone-400 uppercase tracking-wider mb-1 sm:mb-2">Total Devido</p>
+            <p className="text-lg sm:text-2xl font-bold text-stone-800">R$ {finance.valor_total.toLocaleString('pt-BR')}</p>
           </div>
-          <div className="bg-white p-6 rounded-2xl border border-stone-100 shadow-sm">
-            <p className="text-xs font-bold text-stone-400 uppercase tracking-wider mb-2">Total Pago</p>
-            <p className="text-2xl font-bold text-emerald-600">R$ {finance.valor_pago.toLocaleString('pt-BR')}</p>
+          <div className="bg-white p-4 sm:p-6 rounded-2xl border border-stone-100 shadow-sm">
+            <p className="text-[10px] sm:text-xs font-bold text-stone-400 uppercase tracking-wider mb-1 sm:mb-2">Total Pago</p>
+            <p className="text-lg sm:text-2xl font-bold text-emerald-600">R$ {finance.valor_pago.toLocaleString('pt-BR')}</p>
           </div>
-          <div className="bg-white p-6 rounded-2xl border border-stone-100 shadow-sm">
-            <p className="text-xs font-bold text-stone-400 uppercase tracking-wider mb-2">Saldo Restante</p>
-            <p className="text-2xl font-bold text-orange-600">R$ {finance.saldo.toLocaleString('pt-BR')}</p>
+          <div className="bg-white p-4 sm:p-6 rounded-2xl border border-stone-100 shadow-sm">
+            <p className="text-[10px] sm:text-xs font-bold text-stone-400 uppercase tracking-wider mb-1 sm:mb-2">Saldo Restante</p>
+            <p className="text-lg sm:text-2xl font-bold text-orange-600">R$ {finance.saldo.toLocaleString('pt-BR')}</p>
           </div>
-          <div className="bg-emerald-50 p-6 rounded-2xl border border-emerald-100 shadow-sm">
-            <p className="text-xs font-bold text-emerald-600 uppercase tracking-wider mb-2">Parcela Mensal</p>
-            <p className="text-2xl font-bold text-emerald-700">R$ {installment.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-            <p className="text-[10px] text-emerald-500 mt-1 font-medium uppercase tracking-tighter">Até Nov/2026 (9x)</p>
+          <div className="bg-emerald-50 p-4 sm:p-6 rounded-2xl border border-emerald-100 shadow-sm col-span-2 lg:col-span-1">
+            <p className="text-[10px] sm:text-xs font-bold text-emerald-600 uppercase tracking-wider mb-1 sm:mb-2">Parcela Mensal</p>
+            <p className="text-lg sm:text-2xl font-bold text-emerald-700">R$ {installment.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+            <p className="text-[8px] sm:text-[10px] text-emerald-500 mt-1 font-medium uppercase tracking-tighter">Até Nov/2026 (9x)</p>
           </div>
         </div>
 
@@ -469,10 +469,10 @@ function ParticipantDashboard({ user }: { user: User }) {
           
           <div className="divide-y divide-stone-50">
             {family.map(part => (
-              <div key={part.id} className="p-4 flex justify-between items-center hover:bg-stone-50/50 transition-colors">
-                <div>
+              <div key={part.id} className="p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 hover:bg-stone-50/50 transition-colors">
+                <div className="w-full sm:w-auto">
                   <p className="font-bold text-stone-800">{part.nome}</p>
-                  <div className="flex gap-2 mt-1">
+                  <div className="flex flex-wrap gap-2 mt-1">
                     <span className="text-[10px] font-bold uppercase tracking-wider bg-stone-100 text-stone-500 px-2 py-0.5 rounded">
                       {part.tipo} ({part.idade} anos)
                     </span>
@@ -481,13 +481,13 @@ function ParticipantDashboard({ user }: { user: User }) {
                     </span>
                     {part.dias === 4 && (
                       <span className="text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-700 px-2 py-0.5 rounded flex items-center gap-1">
-                        <ShieldCheck size={10} /> Prioridade de Leito
+                        <ShieldCheck size={10} /> Prioridade
                       </span>
                     )}
                   </div>
                 </div>
-                <div className="flex items-center gap-4">
-                  <div className="text-right">
+                <div className="flex items-center justify-between sm:justify-end gap-4 w-full sm:w-auto pt-2 sm:pt-0 border-t sm:border-t-0 border-stone-50">
+                  <div className="text-left sm:text-right">
                     <p className="font-bold text-stone-800 text-sm">R$ {part.valor_total.toLocaleString('pt-BR')}</p>
                   </div>
                   <div className="flex items-center gap-1">
@@ -906,9 +906,9 @@ function AdminDashboard() {
 
       {/* Notifications Bar */}
       {notifications.length > 0 && (
-        <div className="bg-amber-50 border border-amber-100 p-4 rounded-2xl flex items-center justify-between">
+        <div className="bg-amber-50 border border-amber-100 p-4 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center">
+            <div className="w-10 h-10 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center shrink-0">
               <Bell size={20} />
             </div>
             <div>
@@ -918,7 +918,7 @@ function AdminDashboard() {
           </div>
           <button 
             onClick={() => notifications.forEach(n => handleMarkSeen(n.id))}
-            className="text-xs font-bold text-amber-700 hover:underline"
+            className="text-xs font-bold text-amber-700 hover:underline w-full sm:w-auto text-left sm:text-right"
           >
             Marcar todos como vistos
           </button>
@@ -927,36 +927,36 @@ function AdminDashboard() {
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white p-6 rounded-2xl border border-stone-100 shadow-sm">
+        <div className="bg-white p-4 sm:p-6 rounded-2xl border border-stone-100 shadow-sm">
           <div className="flex justify-between items-center mb-2">
-            <p className="text-xs font-bold text-stone-400 uppercase tracking-wider">Meta do Sítio</p>
-            <span className="text-[10px] font-bold text-emerald-600">{((stats.totalCollected / 16000) * 100).toFixed(1)}%</span>
+            <p className="text-[10px] sm:text-xs font-bold text-stone-400 uppercase tracking-wider">Meta do Sítio</p>
+            <span className="text-[9px] sm:text-[10px] font-bold text-emerald-600">{((stats.totalCollected / 16000) * 100).toFixed(1)}%</span>
           </div>
-          <p className="text-2xl font-bold text-emerald-600">R$ {stats.totalCollected.toLocaleString('pt-BR')}</p>
-          <p className="text-[10px] text-stone-400 mt-1">Meta: R$ 16.000</p>
+          <p className="text-xl sm:text-2xl font-bold text-emerald-600">R$ {stats.totalCollected.toLocaleString('pt-BR')}</p>
+          <p className="text-[9px] sm:text-[10px] text-stone-400 mt-1">Meta: R$ 16.000</p>
           <div className="w-full h-1.5 bg-stone-100 rounded-full mt-2 overflow-hidden">
             <div className="h-full bg-emerald-500 transition-all duration-500" style={{ width: `${Math.min((stats.totalCollected / 16000) * 100, 100)}%` }}></div>
           </div>
         </div>
-        <div className="bg-white p-6 rounded-2xl border border-stone-100 shadow-sm">
-          <p className="text-xs font-bold text-stone-400 uppercase tracking-wider mb-2">Falta para a Meta</p>
-          <p className="text-2xl font-bold text-orange-600">R$ {stats.totalPending.toLocaleString('pt-BR')}</p>
-          <p className="text-[10px] text-stone-400 mt-1">Restante para os R$ 16k</p>
+        <div className="bg-white p-4 sm:p-6 rounded-2xl border border-stone-100 shadow-sm">
+          <p className="text-[10px] sm:text-xs font-bold text-stone-400 uppercase tracking-wider mb-2">Falta para a Meta</p>
+          <p className="text-xl sm:text-2xl font-bold text-orange-600">R$ {stats.totalPending.toLocaleString('pt-BR')}</p>
+          <p className="text-[9px] sm:text-[10px] text-stone-400 mt-1">Restante para os R$ 16k</p>
         </div>
-        <div className="bg-white p-6 rounded-2xl border border-stone-100 shadow-sm">
-          <p className="text-xs font-bold text-stone-400 uppercase tracking-wider mb-2">Dívida das Famílias</p>
-          <p className="text-2xl font-bold text-red-600">R$ {stats.totalToReceiveFromFamilies.toLocaleString('pt-BR')}</p>
-          <p className="text-[10px] text-stone-400 mt-1">Soma de todos os saldos</p>
+        <div className="bg-white p-4 sm:p-6 rounded-2xl border border-stone-100 shadow-sm">
+          <p className="text-[10px] sm:text-xs font-bold text-stone-400 uppercase tracking-wider mb-2">Dívida das Famílias</p>
+          <p className="text-xl sm:text-2xl font-bold text-red-600">R$ {stats.totalToReceiveFromFamilies.toLocaleString('pt-BR')}</p>
+          <p className="text-[9px] sm:text-[10px] text-stone-400 mt-1">Soma de todos os saldos</p>
         </div>
-        <div className="bg-white p-6 rounded-2xl border border-stone-100 shadow-sm">
+        <div className="bg-white p-4 sm:p-6 rounded-2xl border border-stone-100 shadow-sm">
           <div className="flex justify-between items-center mb-2">
-            <p className="text-xs font-bold text-stone-400 uppercase tracking-wider">Vagas</p>
-            <span className="text-[10px] font-bold text-emerald-600">{stats.vagasOcupadas}/{stats.vagasTotais}</span>
+            <p className="text-[10px] sm:text-xs font-bold text-stone-400 uppercase tracking-wider">Vagas</p>
+            <span className="text-[9px] sm:text-[10px] font-bold text-emerald-600">{stats.vagasOcupadas}/{stats.vagasTotais}</span>
           </div>
           <div className="w-full h-2 bg-stone-100 rounded-full overflow-hidden">
             <div className="h-full bg-emerald-500" style={{ width: `${(stats.vagasOcupadas / stats.vagasTotais) * 100}%` }}></div>
           </div>
-          <p className="text-[9px] text-stone-400 mt-2 leading-tight">
+          <p className="text-[8px] sm:text-[9px] text-stone-400 mt-2 leading-tight">
             * Vagas 41 a 55: Sem leito (levar colchão)
           </p>
         </div>
@@ -967,53 +967,55 @@ function AdminDashboard() {
         <h3 className="font-bold text-stone-800 px-1">Grupos Familiares</h3>
         {families.map(fam => (
           <div key={fam.id} className="bg-white rounded-3xl border border-stone-100 shadow-sm overflow-hidden">
-            <div className="p-6 bg-stone-50/50 border-b border-stone-100 flex flex-wrap justify-between items-center gap-4">
-              <div>
-                <h4 className="text-lg font-bold text-stone-800 flex items-center gap-2">
-                  <span className="w-8 h-8 bg-emerald-100 text-emerald-700 rounded-lg flex items-center justify-center text-sm">
+            <div className="p-4 sm:p-6 bg-stone-50/50 border-b border-stone-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <div className="w-full sm:w-auto">
+                <h4 className="text-base sm:text-lg font-bold text-stone-800 flex items-center gap-2">
+                  <span className="w-8 h-8 bg-emerald-100 text-emerald-700 rounded-lg flex items-center justify-center text-sm shrink-0">
                     {fam.lider.charAt(0)}
                   </span>
-                  Família {fam.lider}
+                  <span className="truncate">Família {fam.lider}</span>
                 </h4>
-                <p className="text-xs text-stone-400 mt-1">Líder: {fam.lider}</p>
+                <p className="text-[10px] sm:text-xs text-stone-400 mt-1">Líder: {fam.lider}</p>
               </div>
-              <div className="flex items-center gap-6">
-                <div className="text-right">
-                  <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest">Parcela (9x)</p>
-                  <p className="text-sm font-bold text-emerald-600">
-                    R$ {calculateInstallment(fam.saldo).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </p>
+              <div className="w-full sm:w-auto flex flex-col sm:flex-row items-stretch sm:items-center gap-4 sm:gap-6">
+                <div className="grid grid-cols-3 sm:flex sm:items-center gap-4 sm:gap-6 w-full sm:w-auto">
+                  <div className="text-left sm:text-right">
+                    <p className="text-[8px] sm:text-[10px] font-bold text-stone-400 uppercase tracking-widest">Parcela</p>
+                    <p className="text-xs sm:text-sm font-bold text-emerald-600">
+                      R$ {calculateInstallment(fam.saldo).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                  <div className="text-left sm:text-right">
+                    <p className="text-[8px] sm:text-[10px] font-bold text-stone-400 uppercase tracking-widest">Saldo</p>
+                    <p className={`text-xs sm:text-sm font-bold ${fam.saldo <= 0 ? 'text-emerald-600' : 'text-orange-600'}`}>
+                      R$ {fam.saldo.toLocaleString('pt-BR')}
+                    </p>
+                  </div>
+                  <div className="text-left sm:text-right">
+                    <p className="text-[8px] sm:text-[10px] font-bold text-stone-400 uppercase tracking-widest">Status</p>
+                    <span className={`inline-block text-[8px] sm:text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${fam.status === 'Quitado' ? 'bg-emerald-50 text-emerald-600' : fam.status === 'Parcial' ? 'bg-orange-50 text-orange-600' : 'bg-red-50 text-red-600'}`}>
+                      {fam.status}
+                    </span>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest">Saldo</p>
-                  <p className={`text-sm font-bold ${fam.saldo <= 0 ? 'text-emerald-600' : 'text-orange-600'}`}>
-                    R$ {fam.saldo.toLocaleString('pt-BR')}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest">Status</p>
-                  <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${fam.status === 'Quitado' ? 'bg-emerald-50 text-emerald-600' : fam.status === 'Parcial' ? 'bg-orange-50 text-orange-600' : 'bg-red-50 text-red-600'}`}>
-                    {fam.status}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center justify-end gap-2 pt-2 sm:pt-0 border-t sm:border-t-0 border-stone-100">
                   <button 
                     onClick={() => setShowAddPayment(fam.id)}
-                    className="p-2 bg-white border border-stone-200 rounded-xl text-stone-600 hover:border-emerald-500 hover:text-emerald-600 transition-all shadow-sm"
+                    className="flex-1 sm:flex-none p-2 bg-white border border-stone-200 rounded-xl text-stone-600 hover:border-emerald-500 hover:text-emerald-600 transition-all shadow-sm flex justify-center"
                     title="Lançar Pagamento Manual"
                   >
                     <DollarSign size={18} />
                   </button>
                   <button 
                     onClick={() => setShowAddMember(fam.id)}
-                    className="p-2 bg-white border border-stone-200 rounded-xl text-stone-600 hover:border-emerald-500 hover:text-emerald-600 transition-all shadow-sm"
+                    className="flex-1 sm:flex-none p-2 bg-white border border-stone-200 rounded-xl text-stone-600 hover:border-emerald-500 hover:text-emerald-600 transition-all shadow-sm flex justify-center"
                     title="Adicionar Membro"
                   >
                     <UserPlus size={18} />
                   </button>
                   <button 
                     onClick={() => handleDeleteFamily(fam.id)}
-                    className="p-2 bg-white border border-stone-200 rounded-xl text-stone-600 hover:border-red-500 hover:text-red-600 transition-all shadow-sm"
+                    className="flex-1 sm:flex-none p-2 bg-white border border-stone-200 rounded-xl text-stone-600 hover:border-red-500 hover:text-red-600 transition-all shadow-sm flex justify-center"
                     title="Excluir Família"
                   >
                     <Trash2 size={18} />
