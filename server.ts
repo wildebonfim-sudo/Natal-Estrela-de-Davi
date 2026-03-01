@@ -274,6 +274,27 @@ async function startServer() {
     }
   });
 
+  app.post("/api/admin/create-family", async (req, res) => {
+    const { nome } = req.body;
+    try {
+      const result = await db.prepare("INSERT INTO usuarios (nome, tipo_usuario, lider_familia) VALUES (?, ?, ?)")
+        .run(nome, "participante", "sim");
+      
+      const lastId = result.lastInsertRowid !== undefined ? Number(result.lastInsertRowid) : null;
+      
+      if (lastId) {
+        await db.prepare("INSERT INTO financeiro (usuario_id, valor_total, valor_pago, saldo, status) VALUES (?, ?, ?, ?, ?)")
+          .run(lastId, 0, 0, 0, "Pendente");
+        res.json({ success: true, id: lastId });
+      } else {
+        res.status(500).json({ error: "Falha ao obter ID do novo usuário" });
+      }
+    } catch (e) {
+      console.error(e);
+      res.status(500).json({ error: "Erro ao criar família" });
+    }
+  });
+
   app.delete("/api/user/:id", async (req, res) => {
     try {
       const userId = req.params.id;
@@ -291,23 +312,24 @@ async function startServer() {
   });
 
   app.get("/api/admin/stats", async (req, res) => {
-    const statsRes = await db.prepare("SELECT SUM(valor_pago) as sum FROM financeiro").get();
-    const balancesRes = await db.prepare("SELECT SUM(saldo) as sum FROM financeiro").get();
-    const participantsRes = await db.prepare("SELECT COUNT(*) as count FROM participantes WHERE tipo != 'Isento'").get();
+    const statsRes = await db.prepare("SELECT SUM(valor_pago) as sum FROM financeiro").get() as any;
+    const balancesRes = await db.prepare("SELECT SUM(saldo) as sum FROM financeiro").get() as any;
+    const participantsRes = await db.prepare("SELECT COUNT(*) as count FROM participantes").get() as any;
+    const familiesRes = await db.prepare("SELECT COUNT(*) as count FROM usuarios WHERE tipo_usuario = 'participante'").get() as any;
     
     const totalCollected = statsRes.sum || 0;
-    // Falta para a Meta do Sítio (16.000)
     const totalPending = Math.max(0, 16000 - totalCollected);
-    // Total que as famílias ainda devem (Soma de todos os saldos individuais)
     const totalToReceiveFromFamilies = balancesRes.sum || 0;
-    const totalParticipants = participantsRes.count;
+    const totalParticipants = participantsRes.count || 0;
+    const totalFamilies = familiesRes.count || 0;
     
     res.json({ 
       totalCollected, 
       totalPending, 
       totalToReceiveFromFamilies, 
       vagasOcupadas: totalParticipants, 
-      vagasTotais: 55 
+      vagasTotais: 55,
+      familiasTotal: totalFamilies
     });
   });
 

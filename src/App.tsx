@@ -24,7 +24,9 @@ import {
   Clock,
   DollarSign,
   Download,
-  Bell
+  Bell,
+  Search,
+  Share2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { GoogleGenAI } from "@google/genai";
@@ -771,10 +773,14 @@ function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [showAddPayment, setShowAddPayment] = useState<number | null>(null);
   const [showAddMember, setShowAddMember] = useState<number | null>(null);
+  const [showAddFamily, setShowAddFamily] = useState(false);
   const [showEditAge, setShowEditAge] = useState<{ id: number, nome: string, idade: number } | null>(null);
   const [showReceipt, setShowReceipt] = useState<{ id: number, data: string, amount: number } | null>(null);
   const [manualPayment, setManualPayment] = useState({ amount: 0, date: new Date().toISOString().split('T')[0] });
   const [newMember, setNewMember] = useState({ nome: '', idade: 18, tipo: 'Adulto', dias: 4 });
+  const [newFamilyName, setNewFamilyName] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterStatus, setFilterStatus] = useState('Todos');
 
   const fetchData = async () => {
     const [statsRes, famRes, notifRes] = await Promise.all([
@@ -823,6 +829,20 @@ function AdminDashboard() {
     if (res.ok) {
       setShowAddMember(null);
       setNewMember({ nome: '', idade: 18, tipo: 'Adulto', dias: 4 });
+      fetchData();
+    }
+  };
+
+  const handleCreateFamily = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const res = await fetch('/api/admin/create-family', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nome: newFamilyName })
+    });
+    if (res.ok) {
+      setShowAddFamily(false);
+      setNewFamilyName('');
       fetchData();
     }
   };
@@ -889,6 +909,54 @@ function AdminDashboard() {
     return balance > 0 ? balance / monthsRemaining : 0;
   };
 
+  const copyFamilySummary = (fam: any) => {
+    const summary = `*Resumo Natal 2026 - Família ${fam.lider}*\n\n` +
+      `Participantes: ${fam.members.length}\n` +
+      `Total Devido: R$ ${fam.valor_total.toLocaleString('pt-BR')}\n` +
+      `Total Pago: R$ ${fam.valor_pago.toLocaleString('pt-BR')}\n` +
+      `Saldo Restante: R$ ${fam.saldo.toLocaleString('pt-BR')}\n` +
+      `Status: ${fam.status}\n\n` +
+      `Próxima Parcela Sugerida: R$ ${calculateInstallment(fam.saldo).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    
+    navigator.clipboard.writeText(summary);
+    alert('Resumo copiado para a área de transferência!');
+  };
+
+  const filteredFamilies = families.filter(fam => {
+    const matchesSearch = fam.lider.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = filterStatus === 'Todos' || fam.status === filterStatus;
+    return matchesSearch && matchesStatus;
+  });
+
+  const exportToCSV = () => {
+    const headers = ['Familia', 'Participante', 'Tipo', 'Idade', 'Dias', 'Valor Total'];
+    const rows = families.flatMap(fam => 
+      fam.members.map((m: any) => [
+        fam.lider,
+        m.nome,
+        m.tipo,
+        m.idade,
+        m.dias,
+        m.valor_total
+      ])
+    );
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(r => r.join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'participantes_natal_2026.csv');
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   if (loading) return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-4 border-emerald-200 border-t-emerald-600 rounded-full animate-spin"></div></div>;
 
   return (
@@ -950,22 +1018,69 @@ function AdminDashboard() {
         </div>
         <div className="bg-white p-4 sm:p-6 rounded-2xl border border-stone-100 shadow-sm">
           <div className="flex justify-between items-center mb-2">
-            <p className="text-[10px] sm:text-xs font-bold text-stone-400 uppercase tracking-wider">Vagas</p>
+            <p className="text-[10px] sm:text-xs font-bold text-stone-400 uppercase tracking-wider">Vagas e Famílias</p>
             <span className="text-[9px] sm:text-[10px] font-bold text-emerald-600">{stats.vagasOcupadas}/{stats.vagasTotais}</span>
           </div>
           <div className="w-full h-2 bg-stone-100 rounded-full overflow-hidden">
             <div className="h-full bg-emerald-500" style={{ width: `${(stats.vagasOcupadas / stats.vagasTotais) * 100}%` }}></div>
           </div>
-          <p className="text-[8px] sm:text-[9px] text-stone-400 mt-2 leading-tight">
-            * Vagas 41 a 55: Sem leito (levar colchão)
-          </p>
+          <div className="flex justify-between items-center mt-2">
+            <p className="text-[8px] sm:text-[9px] text-stone-400 leading-tight">
+              * Vagas 41 a 55: Sem leito
+            </p>
+            <p className="text-[9px] font-bold text-stone-600">{stats.familiasTotal} Famílias</p>
+          </div>
         </div>
       </div>
 
       {/* Family Groups */}
       <div className="space-y-4">
-        <h3 className="font-bold text-stone-800 px-1">Grupos Familiares</h3>
-        {families.map(fam => (
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 px-1">
+          <h3 className="font-bold text-stone-800">Grupos Familiares</h3>
+          <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+            <div className="relative flex-1 md:w-64">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" size={14} />
+              <input 
+                type="text" 
+                placeholder="Buscar família..."
+                className="w-full pl-9 pr-4 py-2 bg-white border border-stone-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 outline-none"
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+              />
+            </div>
+            <select 
+              className="px-3 py-2 bg-white border border-stone-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-emerald-500 appearance-none"
+              value={filterStatus}
+              onChange={e => setFilterStatus(e.target.value)}
+            >
+              <option value="Todos">Todos Status</option>
+              <option value="Quitado">Quitado</option>
+              <option value="Parcial">Parcial</option>
+              <option value="Pendente">Pendente</option>
+            </select>
+            <button 
+              onClick={() => setShowAddFamily(true)}
+              className="flex items-center gap-1.5 text-xs font-bold text-emerald-600 bg-emerald-50 hover:bg-emerald-100 px-4 py-2 rounded-xl transition-all"
+            >
+              <Plus size={14} />
+              Nova Família
+            </button>
+            <button 
+              onClick={exportToCSV}
+              className="flex items-center gap-1.5 text-xs font-bold text-stone-600 bg-stone-100 hover:bg-stone-200 px-4 py-2 rounded-xl transition-all"
+            >
+              <Download size={14} />
+              Exportar CSV
+            </button>
+          </div>
+        </div>
+        
+        {filteredFamilies.length === 0 ? (
+          <div className="bg-white p-12 rounded-3xl border border-dashed border-stone-200 text-center">
+            <p className="text-stone-400 text-sm italic">Nenhuma família encontrada com esses filtros.</p>
+          </div>
+        ) : (
+          filteredFamilies.map(fam => (
           <div key={fam.id} className="bg-white rounded-3xl border border-stone-100 shadow-sm overflow-hidden">
             <div className="p-4 sm:p-6 bg-stone-50/50 border-b border-stone-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
               <div className="w-full sm:w-auto">
@@ -999,6 +1114,13 @@ function AdminDashboard() {
                   </div>
                 </div>
                 <div className="flex items-center justify-end gap-2 pt-2 sm:pt-0 border-t sm:border-t-0 border-stone-100">
+                  <button 
+                    onClick={() => copyFamilySummary(fam)}
+                    className="flex-1 sm:flex-none p-2 bg-white border border-stone-200 rounded-xl text-stone-600 hover:border-emerald-500 hover:text-emerald-600 transition-all shadow-sm flex justify-center"
+                    title="Copiar Resumo para WhatsApp"
+                  >
+                    <Share2 size={18} />
+                  </button>
                   <button 
                     onClick={() => setShowAddPayment(fam.id)}
                     className="flex-1 sm:flex-none p-2 bg-white border border-stone-200 rounded-xl text-stone-600 hover:border-emerald-500 hover:text-emerald-600 transition-all shadow-sm flex justify-center"
@@ -1082,7 +1204,7 @@ function AdminDashboard() {
               </div>
             </div>
           </div>
-        ))}
+        )))}
       </div>
 
       {/* Receipt View Modal */}
@@ -1275,6 +1397,47 @@ function AdminDashboard() {
                 </div>
                 <button className="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold shadow-lg shadow-emerald-200 hover:bg-emerald-700 transition-all mt-4">
                   Confirmar Cadastro
+                </button>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Add Family Modal */}
+      <AnimatePresence>
+        {showAddFamily && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-stone-900/40 backdrop-blur-sm">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden"
+            >
+              <div className="p-6 border-b border-stone-100 flex justify-between items-center bg-stone-50/50">
+                <h3 className="font-bold text-stone-800">Criar Nova Família</h3>
+                <button onClick={() => setShowAddFamily(false)} className="text-stone-400 hover:text-stone-600">
+                  <Plus size={20} className="rotate-45" />
+                </button>
+              </div>
+              <form onSubmit={handleCreateFamily} className="p-6 space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-stone-400 uppercase tracking-wider mb-1 ml-1">Nome do Líder da Família</label>
+                  <input 
+                    type="text" 
+                    required 
+                    autoFocus
+                    placeholder="Ex: Família Souza ou Nome do Líder"
+                    className="w-full px-4 py-3 rounded-xl border border-stone-200 focus:ring-2 focus:ring-emerald-500 outline-none"
+                    value={newFamilyName}
+                    onChange={e => setNewFamilyName(e.target.value)}
+                  />
+                  <p className="text-[10px] text-stone-400 mt-2 leading-relaxed">
+                    Isso criará um novo perfil de acesso. Depois você poderá adicionar os membros e pagamentos dentro desta família.
+                  </p>
+                </div>
+                <button className="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold shadow-lg shadow-emerald-200 hover:bg-emerald-700 transition-all mt-4">
+                  Criar Família
                 </button>
               </form>
             </motion.div>
