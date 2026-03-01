@@ -314,7 +314,7 @@ async function startServer() {
   app.get("/api/admin/stats", async (req, res) => {
     const statsRes = await db.prepare("SELECT SUM(valor_pago) as sum FROM financeiro").get() as any;
     const balancesRes = await db.prepare("SELECT SUM(saldo) as sum FROM financeiro").get() as any;
-    const participantsRes = await db.prepare("SELECT COUNT(*) as count FROM participantes").get() as any;
+    const participantsRes = await db.prepare("SELECT COUNT(*) as count FROM participantes WHERE tipo != 'Isento'").get() as any;
     const familiesRes = await db.prepare("SELECT COUNT(*) as count FROM usuarios WHERE tipo_usuario = 'participante'").get() as any;
     
     const totalCollected = statsRes.sum || 0;
